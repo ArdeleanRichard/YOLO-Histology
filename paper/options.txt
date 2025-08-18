@@ -1,6 +1,16 @@
-MDPI Biology (Q1: https://wos-journal.info/journalid/13138):
-https://www.mdpi.com/journal/biology
+MDPI Biology:
+- Site: https://www.mdpi.com/journal/biology
+- Q1: https://wos-journal.info/journalid/13138
+- Domains: BIOLOGY
+- eISSN: 2079-7737
 
 -Special issues:
 -- Machine Learning Applications in Biology—2nd Edition: https://www.mdpi.com/journal/biology/special_issues/4G7016877B
 -- Methods in Bioinformatics and Computational Biology: https://www.mdpi.com/journal/biology/special_issues/O7EHHA2V57
+
+Elsevier Computers in Biology and Medicine
+- Site: https://www.sciencedirect.com/journal/computers-in-biology-and-medicine
+- Q1: https://wos-journal.info/journalid/2793
+- Domains: BIOLOGY + COMPUTER SCIENCE, INTERDISCIPLINARY APPLICATIONS
+- ISSN: 0010-4825
+- eISSN: 1879-0534
