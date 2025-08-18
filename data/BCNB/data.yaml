@@ -1,0 +1,5 @@
+train: ..\data\BCNB\images\train
+val: ..\data\BCNB\images\val
+test: ..\data\BCNB\images\test
+nc: 2
+names: [Positive, Negative]

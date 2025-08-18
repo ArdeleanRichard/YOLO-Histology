@@ -1,0 +1,6 @@
+MDPI Biology (Q1: https://wos-journal.info/journalid/13138):
+https://www.mdpi.com/journal/biology
+
+-Special issues:
+-- Machine Learning Applications in Biology—2nd Edition: https://www.mdpi.com/journal/biology/special_issues/4G7016877B
+-- Methods in Bioinformatics and Computational Biology: https://www.mdpi.com/journal/biology/special_issues/O7EHHA2V57
