@@ -1,0 +1,7 @@
+numpy
+torch
+ultralytics
+matplotlib
+opencv-python
+tqdm
+pillow

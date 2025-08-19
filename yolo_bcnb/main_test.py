@@ -1,21 +1,18 @@
-from ultralytics import YOLO, RTDETR
-from constants import dataset_yaml_path, yolo12_model_path, data_root, detr_model_path
+from constants import dataset_yaml_path, data_root
 import torch
 from torch.utils.data import DataLoader
 
-from functions import YOLOtoSegmentationDataset, evaluate_model, evaluate_model_box, load_model
+from functions import YOLOtoSegmentationDataset, evaluate_model, evaluate_model_box, load_model_test
 
 if __name__ == "__main__":
-    MODEL = "yolo12"
-    model, _, _ = load_model(MODEL)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    test_dataset = YOLOtoSegmentationDataset("../" + data_root + "yolo/", image_size=512, split="test")
-    test_loader = DataLoader(test_dataset, batch_size=4, shuffle=False)
+    MODEL = "yolo12"
+    model = load_model_test(MODEL)
+    print(model.names)
 
     ### Evaluate the model
-
-    metrics = evaluate_model_box(model, dataset_yaml_path, test_loader, device, conf=0.25)
+    metrics = evaluate_model_box(model, dataset_yaml_path, device)
 
     # Print metrics in the same format as the UNet evaluation
     print("Evaluation Metrics:")
@@ -26,5 +23,7 @@ if __name__ == "__main__":
     print(f"Mean Recall:    {metrics["Box Recall"     ]:.3f}")
 
     # Visualize some predictions
+    # test_dataset = YOLOtoSegmentationDataset(data_root, image_size=640, split="test")
+    # test_loader = DataLoader(test_dataset, batch_size=4, shuffle=False)
     # visualize_predictions(model, test_loader, device)
     # visualize_predictions_with_ground_truth(model, test_loader, device)

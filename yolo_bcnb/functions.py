@@ -1,16 +1,11 @@
-from ultralytics import YOLO, RTDETR
-import torch
+from ultralytics import YOLO, RTDETR, YOLOE, YOLOWorld
 import numpy as np
-from tqdm import tqdm
 import matplotlib.pyplot as plt
 import cv2
 import os
 import torch
-import torch.nn.functional as F
 from torch.utils.data import Dataset
 from tqdm import tqdm
-import scipy.io as io
-from torch.utils.data import DataLoader
 
 
 class YOLOtoSegmentationDataset(Dataset):
@@ -201,7 +196,7 @@ def evaluate_model_box_mask(model, dataset_yaml_path, test_loader, device):
         "Mask F1":              np.mean(np.array(val_results.seg.f1)),
     }
 
-def evaluate_model_box(model, dataset_yaml_path, test_loader, device):
+def evaluate_model_box(model, dataset_yaml_path, device):
     """
     Evaluate YOLO model using metrics similar to the UNet evaluation.
 
@@ -217,7 +212,7 @@ def evaluate_model_box(model, dataset_yaml_path, test_loader, device):
 
     # Run YOLO validation on the dataset
     conf=0.25
-    nms=0.3
+    nms=0.5
     val_results = model.val(data=dataset_yaml_path, conf=conf, iou=nms, split='test')
 
     return {
@@ -339,10 +334,10 @@ def visualize_predictions_with_ground_truth(model, test_loader, device, num_samp
 
 from constants import (yolo12_model_config, yolo12_model_path, yolo12_model_name,
                        detr_model_name, detr_model_path, detr_model_config, yolo8_model_config, yolo8_model_name, yolo9_model_config, yolo10_model_config, yolo11_model_config, yolo11_model_name, yolo10_model_name, yolo9_model_name, yolo9_model_path,
-                       yolo8_model_path, yolo10_model_path, yolo11_model_path)
+                       yolo8_model_path, yolo10_model_path, yolo11_model_path, yoloe_model_config, yoloe_model_name, yoloe_model_path, yoloworld_model_config, yoloworld_model_name, yoloworld_model_path)
 
 
-def load_model(model_name):
+def load_model_train(model_name):
     if model_name == "rtdetr":
         return RTDETR(detr_model_config), detr_model_name, detr_model_path
     if model_name == "yolo8":
@@ -355,7 +350,26 @@ def load_model(model_name):
         return YOLO(yolo11_model_config), yolo11_model_name, yolo11_model_path
     if model_name == "yolo12":
         return YOLO(yolo12_model_config), yolo12_model_name, yolo12_model_path
+    if model_name == "yoloe":
+        return YOLOE(yoloe_model_config), yoloe_model_name, yoloe_model_path
+    if model_name == "yolow":
+        return YOLOWorld(yoloworld_model_config), yoloworld_model_name, yoloworld_model_path
+
+
+def load_model_test(model_name):
+    if model_name == "rtdetr":
+        return RTDETR(detr_model_path)
+    if model_name == "yolo8":
+        return YOLO(yolo8_model_path)
+    if model_name == "yolo9":
+        return YOLO(yolo9_model_path)
+    if model_name == "yolo10":
+        return YOLO(yolo10_model_path)
     if model_name == "yolo12":
-        return YOLO(yolo12_model_config), yolo12_model_name, yolo12_model_path
+        return YOLO(yolo11_model_path)
     if model_name == "yolo12":
-        return YOLO(yolo12_model_config), yolo12_model_name, yolo12_model_path
+        return YOLO(yolo12_model_path)
+    if model_name == "yoloe":
+        return YOLOE(yoloe_model_path)
+    if model_name == "yolow":
+        return YOLOWorld(yoloworld_model_path)
