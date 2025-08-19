@@ -4,8 +4,8 @@ import matplotlib.patches as patches
 from PIL import Image
 
 # Update these paths
-wsi_path = './images/1.jpg'
-json_path = './images/1.json'
+wsi_path = './original_images/1.jpg'
+json_path = './original_images/1.json'
 
 # Reduce size when opening
 Image.MAX_IMAGE_PIXELS = None

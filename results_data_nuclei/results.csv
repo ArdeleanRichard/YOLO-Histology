@@ -1,0 +1,2 @@
+dataset,model,box_mean_precision,box_mean_recall,box_mean_f1,box_mAP@50,box_mAP@50-95,seg_mean_precision,seg_mean_recall,seg_mean_f1,seg_mAP@50,seg_mAP@50-95
+nuclei,yolo12,0.3175,0.4890885750962773,0.3850429509853461,0.3183709272462098,0.1933123707972181,,,,,

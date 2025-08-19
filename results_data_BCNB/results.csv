@@ -1,0 +1,2 @@
+dataset,model,box_mean_precision,box_mean_recall,box_mean_f1,box_mAP@50,box_mAP@50-95,seg_mean_precision,seg_mean_recall,seg_mean_f1,seg_mAP@50,seg_mAP@50-95
+BCNB,yolo12,0.4496753246753247,0.14972972972972973,0.22465531224655305,0.2768707592685631,0.1533361865073471,,,,,

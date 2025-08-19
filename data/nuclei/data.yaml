@@ -1,0 +1,5 @@
+train:  ..\..\data\nuclei\images\train
+val:    ..\..\data\nuclei\images\val
+test:   ..\..\data\nuclei\images\test
+nc: 1
+names: [Nucleus]
