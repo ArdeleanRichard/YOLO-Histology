@@ -208,4 +208,7 @@ __marimo__/
 
 original_images/
 original_masks/
+models/
 runs/
+runs_train/
+runs_test/

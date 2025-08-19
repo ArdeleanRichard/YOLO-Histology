@@ -47,7 +47,7 @@ if __name__ == '__main__':
 
         # Save best model during training
         save_period=10,         # save checkpoint every x epochs
-        project=f"{result_root}/runs",         # project name
+        project=f"{result_root}/runs_train/",
         name=model_name,        # experiment name
     )
     print(model.names)
