@@ -1,10 +1,10 @@
 import os
 
 # === CONFIGURATION ===
-
 MODEL = "yolo12"
-DATA = "BCNB"
+# DATA = "BCNB"
 # DATA = "nuclei"
+DATA = "TNBC"
 
 data_root = f"./data/{DATA}/"
 result_root = f"./results_data_{DATA}/"
@@ -22,7 +22,8 @@ label_folder = f"{data_root}/labels/test/"  # Folder with ground truth YOLO labe
 dataset_yaml_path = data_root + 'data.yaml'
 dataset_SEG_yaml_path = data_root + 'data_seg.yaml'
 
-# Instantiate the models
+
+# === MODELS ===
 yolo8_model_name = "yolo8s"
 yolo8_model_config = f"{download_model_root}/{yolo8_model_name}.pt"
 yolo8_model_path = f"{saved_model_root}/{yolo8_model_name}.pt"

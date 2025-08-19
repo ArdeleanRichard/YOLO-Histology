@@ -1,0 +1,8 @@
+path: ./data/nuclei/nuclei_seg
+train:  images/train  # train images (relative to 'path') 4 images
+val:    images/val    # val images (relative to 'path') 4 images
+test:   images/test   # test images (optional)
+
+# Classes
+names:
+  0: Nucleus

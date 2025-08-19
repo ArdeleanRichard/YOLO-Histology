@@ -8,7 +8,5 @@ if __name__ == "__main__":
     num_classes = len(class_names)
 
     # === IMAGES ===
-    images = get_file_names(image_folder, 4)  # Get 4 images
-
-    combined_images = prepare_images(image_folder, label_folder, class_names)
+    combined_images = prepare_images(model, image_folder, label_folder, class_names)
     plot(combined_images)

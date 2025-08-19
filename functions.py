@@ -16,45 +16,49 @@ from constants import (yolo12_model_config, yolo12_model_path, yolo12_model_name
                        yolo11_model_config, yolo11_model_name, yolo11_model_path,
                        yoloe_model_config, yoloe_model_name, yoloe_model_path,
                        yoloworld_model_config, yoloworld_model_name, yoloworld_model_path,
-                       result_root, fig_root, data_root)
+                       result_root, fig_root, data_root, MODEL)
 
 
 
 def load_model_train(model_name):
     if model_name == "rtdetr":
         return RTDETR(detr_model_config), detr_model_name, detr_model_path
-    if model_name == "yolo8":
+    elif model_name == "yolo8":
         return YOLO(yolo8_model_config), yolo8_model_name, yolo8_model_path
-    if model_name == "yolo9":
+    elif model_name == "yolo9":
         return YOLO(yolo9_model_config), yolo9_model_name, yolo9_model_path
-    if model_name == "yolo10":
+    elif model_name == "yolo10":
         return YOLO(yolo10_model_config), yolo10_model_name, yolo10_model_path
-    if model_name == "yolo11":
+    elif model_name == "yolo11":
         return YOLO(yolo11_model_config), yolo11_model_name, yolo11_model_path
-    if model_name == "yolo12":
+    elif model_name == "yolo12":
         return YOLO(yolo12_model_config), yolo12_model_name, yolo12_model_path
-    if model_name == "yoloe":
+    elif model_name == "yoloe":
         return YOLOE(yoloe_model_config), yoloe_model_name, yoloe_model_path
-    if model_name == "yolow":
+    elif model_name == "yolow":
         return YOLOWorld(yoloworld_model_config), yoloworld_model_name, yoloworld_model_path
+    else:
+        raise Exception("Model missing")
 
 def load_model_test(model_name):
     if model_name == "rtdetr":
         return RTDETR(detr_model_path)
-    if model_name == "yolo8":
+    elif model_name == "yolo8":
         return YOLO(yolo8_model_path)
-    if model_name == "yolo9":
+    elif model_name == "yolo9":
         return YOLO(yolo9_model_path)
-    if model_name == "yolo10":
+    elif model_name == "yolo10":
         return YOLO(yolo10_model_path)
-    if model_name == "yolo11":
+    elif model_name == "yolo11":
         return YOLO(yolo11_model_path)
-    if model_name == "yolo12":
+    elif model_name == "yolo12":
         return YOLO(yolo12_model_path)
-    if model_name == "yoloe":
+    elif model_name == "yoloe":
         return YOLOE(yoloe_model_path)
-    if model_name == "yolow":
+    elif model_name == "yolow":
         return YOLOWorld(yoloworld_model_path)
+    else:
+        raise Exception("Model missing")
 
 def evaluate_model_box_mask(model, dataset_yaml_path, device):
     """
@@ -249,7 +253,8 @@ def draw_boxes(img, labels, color_map, class_names):
     return img
 
 
-def prepare_images(image_folder, label_folder, class_names):
+def prepare_images(model, image_folder, label_folder, class_names):
+    images = get_file_names(image_folder, 4)  # Get 4 images
     # === COLOR MAP (tab10 with proper BGR tuples) ===
     colors = [tuple(map(int, np.array(c[:3])[::-1] * 255)) for c in plt.get_cmap("tab10").colors]
     # print(colors)
@@ -321,4 +326,5 @@ def plot(combined_images):
     plt.axis("off")
     plt.tight_layout(pad=0)
     plt.savefig(f"{fig_root}/plot_{MODEL}.png", bbox_inches="tight", pad_inches=0)
-    plt.show()
+    # plt.show()
+    plt.close()

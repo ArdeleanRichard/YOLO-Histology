@@ -1,0 +1,2 @@
+dataset,model,box_mean_precision,box_mean_recall,box_mean_f1,box_mAP@50,box_mAP@50-95,seg_mean_precision,seg_mean_recall,seg_mean_f1,seg_mAP@50,seg_mAP@50-95
+TNBC,yolo12,0.9377777777777778,0.8307086614173228,0.8810020876826723,0.9044853496370004,0.6703807577383738,,,,,

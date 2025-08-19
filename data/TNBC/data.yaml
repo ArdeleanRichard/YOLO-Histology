@@ -1,0 +1,5 @@
+train:  ..\..\data\TNBC\images\train
+val:    ..\..\data\TNBC\images\val
+test:   ..\..\data\TNBC\images\test
+nc: 1
+names: [Nucleus]

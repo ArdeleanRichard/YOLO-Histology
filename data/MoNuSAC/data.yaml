@@ -1,0 +1,6 @@
+train:  ..\..\data\MoNuSAC\images\train
+val:    ..\..\data\MoNuSAC\images\val
+test:   ..\..\data\MoNuSAC\images\test
+
+nc: 4  # number of classes
+names: ['Epithelial', 'Lymphocyte', 'Neutrophil', 'Macrophage']  # class names
