@@ -1,0 +1,15 @@
+https://github.com/masih4/CryoNuSeg
+https://www.kaggle.com/datasets/ipateam/segmentation-of-nuclei-in-cryosectioned-he-images
+
+CryoNuSeg: A Dataset for Nuclei Segmentation of Cryosectioned H&E-Stained Histological Images
+
+Full description: https://www.sciencedirect.com/science/article/pii/S0010482521001438
+
+We release the first fully annotated data set comprising 30 digitized Hematoxylin and Eosin (H&E)-stained frozen sections derived from 10 different human organs to enable training and validation of algorithms for nuclei instance segmentation. The digitized sections were derived from The Cancer Genome Atlas (TCGA) and were selected from different laboratories to maximize the staining variability in the data set. Image tiles (3 per tissue) were extracted from adrenal gland, larynx, lymph nodes, mediastinum, pancreas, pleura, skin, testes, thymus, and thyroid gland. Most of the included organs are not covered by other annotated publicly available datasets. In addition to this data set, we implemented a standard segmentation model (https://www.kaggle.com/ipateam/segmentation-of-nuclei-in-cryosectioned-he-images/kernels) as a benchmark for this dataset.
+Dataset description
+
+TCGA was exploited as the main source to extract raw WSI in this work. This rich open access database contains more than 30,000 whole slide images (WSI) from more than 50 human organs. In close collaboration with the Institute for Pathophysiology and Allergy Research at the Medical University of Vienna, Austria, 30 WSIs derived from cryosections (or frozen sections) of 10 human organs were selected. Then, small patches (with a fixed image size of 512 x 512 pixels) were extracted from the WSIs with the aim to cover as much sample variability as possible. Afterward, the selected patches were manually annotated to form a rich dataset of nuclei (more than 8000 fully annotated nuclei).
+Besides the binary labels, different segmentation masks are also provided which may help in developing fully automatic segmentation algorithms (i.e. distance maps, labels masks, binary masks without border, eroded binary masks without border, overlaid images, weighted masks, and eroded weighted masks). A master student from the Medical University of Vienna was first trained to perform manual instance segmentation with ImageJ software on small patches extracted from WSIs. The created masks were then controlled and (if required) corrected by a senior biologist from the Institute for Pathophysiology and Allergy Research at the Medical University of Vienna. The ImageJ segmentation files were finally used to create the aforementioned segmentation masks. Further details and statistics about the dataset can be found in the EDA kernel.
+Task
+
+To have a fair comparison between the segmentation models please read the Task carefully and divide the dataset to the 10 described folds as explained in the task section.

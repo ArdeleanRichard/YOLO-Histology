@@ -1,0 +1,9 @@
+# MoNuSAC Dataset Configuration
+path: C:\WORK\YOLO-Histology\data\MoNuSAC
+train: images/train
+val: images/val
+test: images/test
+
+# Classes
+nc: 4  # number of classes
+names: ['Epithelial', 'Lymphocyte', 'Neutrophil', 'Macrophage']  # class names

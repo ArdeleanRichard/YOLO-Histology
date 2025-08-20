@@ -5,4 +5,5 @@ test:   images/test   # test images (optional)
 
 # Classes
 names:
-  0: Nucleus
+  0: Positive
+  1: Negative

@@ -5,7 +5,7 @@ from pathlib import Path
 import random
 from PIL import Image
 import numpy as np
-
+import glob
 
 def create_directories(base_path):
     """Create the required directory structure"""
@@ -195,7 +195,11 @@ def process_folder(source_folder, output_path, split, single_folder=False):
             if os.path.exists(xml_path):
                 # Copy image
                 dest_img_path = os.path.join(output_path, 'images', split, tif_file)
-                shutil.copy2(img_path, dest_img_path)
+
+                # shutil.copy2(img_path, dest_img_path)
+
+                img = Image.open(img_path).convert("RGB")  # force 3 channels
+                img.save(dest_img_path, format="TIFF", compression="tiff_deflate")
 
                 # Get image dimensions
                 img_width, img_height = get_image_dimensions(img_path)

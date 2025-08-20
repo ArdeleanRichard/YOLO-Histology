@@ -1,10 +1,12 @@
 import os
 
 # === CONFIGURATION ===
-MODEL = "yolo12"
-# DATA = "BCNB"
-# DATA = "nuclei"
-DATA = "TNBC"
+
+# MODEL OPTIONS: ["rtdetr", "yolo8", "yolo9", "yolo10", "yolo11", "yolo12", "yoloe", "yolow"]
+MODEL = "yolow"
+
+# DATA OPTIONS: ["BCNB", "nuclei", "TNBC", "MoNuSAC", "CryoNuSeg"]
+DATA = "CryoNuSeg"
 
 data_root = f"./data/{DATA}/"
 result_root = f"./results_data_{DATA}/"
