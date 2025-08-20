@@ -6,7 +6,7 @@ import os
 MODEL = "yolow"
 
 # DATA OPTIONS: ["BCNB", "nuclei", "TNBC", "MoNuSAC", "CryoNuSeg"]
-DATA = "CryoNuSeg"
+DATA = "TNBC"
 
 data_root = f"./data/{DATA}/"
 result_root = f"./results_data_{DATA}/"
@@ -26,15 +26,15 @@ dataset_SEG_yaml_path = data_root + 'data_seg.yaml'
 
 
 # === MODELS ===
-yolo8_model_name = "yolo8s"
+yolo8_model_name = "yolov8s"
 yolo8_model_config = f"{download_model_root}/{yolo8_model_name}.pt"
 yolo8_model_path = f"{saved_model_root}/{yolo8_model_name}.pt"
 
-yolo9_model_name = "yolo9s"
+yolo9_model_name = "yolov9s"
 yolo9_model_config = f"{download_model_root}/{yolo9_model_name}.pt"
 yolo9_model_path = f"{saved_model_root}/{yolo9_model_name}.pt"
 
-yolo10_model_name = "yolo10s"
+yolo10_model_name = "yolov10s"
 yolo10_model_config = f"{download_model_root}/{yolo10_model_name}.pt"
 yolo10_model_path = f"{saved_model_root}/{yolo10_model_name}.pt"
 

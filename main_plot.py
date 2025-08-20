@@ -1,5 +1,5 @@
 from constants import MODEL, image_folder, label_folder
-from functions import load_model_test, get_file_names, prepare_images, plot
+from functions import load_model_test, prepare_images, plot
 
 if __name__ == "__main__":
     # === LOAD MODEL ===
@@ -9,4 +9,4 @@ if __name__ == "__main__":
 
     # === IMAGES ===
     combined_images = prepare_images(model, image_folder, label_folder, class_names)
-    plot(combined_images)
+    plot(MODEL, combined_images)

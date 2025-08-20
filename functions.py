@@ -16,7 +16,7 @@ from constants import (yolo12_model_config, yolo12_model_path, yolo12_model_name
                        yolo11_model_config, yolo11_model_name, yolo11_model_path,
                        yoloe_model_config, yoloe_model_name, yoloe_model_path,
                        yoloworld_model_config, yoloworld_model_name, yoloworld_model_path,
-                       result_root, fig_root, data_root, MODEL)
+                       result_root, fig_root)
 
 
 
@@ -298,7 +298,7 @@ def prepare_images(model, image_folder, label_folder, class_names):
     return combined_images
 
 
-def plot(combined_images):
+def plot(MODEL, combined_images):
     num_images = 4  # Total images to show
     cols = 2  # Number of columns in final plot
 
