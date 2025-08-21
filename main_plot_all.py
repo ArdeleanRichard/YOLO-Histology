@@ -12,7 +12,7 @@ if __name__ == "__main__":
         combined_images = prepare_images(model, image_folder, label_folder, class_names)
         plot(MODEL, combined_images)
 
-    # Create comparison for first image (index 0)
+    # Create comparison plots
     create_all_models_comparison(image_folder, label_folder, image_index=0)
     # create_all_models_comparison(image_folder, label_folder, image_index=1)
     # create_all_models_comparison(image_folder, label_folder, image_index=2)

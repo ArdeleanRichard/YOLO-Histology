@@ -253,8 +253,8 @@ def draw_boxes(img, labels, color_map, class_names):
     return img
 
 
-def prepare_images(model, image_folder, label_folder, class_names):
-    images = get_file_names(image_folder, 4)  # Get 4 images
+def prepare_images(model, image_folder, label_folder, class_names, nr_images=4):
+    images = get_file_names(image_folder, nr_images)  # Get 4 images
     # === COLOR MAP (tab10 with proper BGR tuples) ===
     colors = [tuple(map(int, np.array(c[:3])[::-1] * 255)) for c in plt.get_cmap("tab10").colors]
     # print(colors)
@@ -396,7 +396,7 @@ def prepare_single_image_all_models(image_folder, label_folder, image_index=0):
         combined_rgb = cv2.cvtColor(combined, cv2.COLOR_BGR2RGB)
         combined_images.append(combined_rgb)
 
-        print(f"Processed {model_name}")
+        # print(f"Processed {model_name}")
 
     return combined_images, img_file
 
@@ -455,10 +455,10 @@ def plot_all_models_single_image(combined_images, image_filename):
 
     # Save with descriptive filename
     safe_filename = os.path.splitext(image_filename)[0]
-    plt.savefig(f"{fig_root}/all_models_comparison_{safe_filename}.png",
+    plt.savefig(f"{fig_root}/visualization_{safe_filename}.png",
                 bbox_inches="tight", pad_inches=0, dpi=150)
     plt.close()
-    print(f"Saved comparison plot to {fig_root}/all_models_comparison_{safe_filename}.png")
+    print(f"Saved comparison plot to {fig_root}/visualization_{safe_filename}.png")
 
 
 # Main function to use in your script
@@ -471,11 +471,9 @@ def create_all_models_comparison(image_folder, label_folder, image_index=0):
         label_folder: Path to labels folder
         image_index: Which image to use (default: 0 for first image)
     """
-    print(f"Creating all-models comparison for image index {image_index}...")
     combined_images, image_filename = prepare_single_image_all_models(
         image_folder, label_folder, image_index
     )
     plot_all_models_single_image(combined_images, image_filename)
-    print("All-models comparison complete!")
 
 
