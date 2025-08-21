@@ -143,33 +143,33 @@ def save_results_to_csv(metrics, model_name, dataset_name, csv_path):
     if model_name != "yoloe":
         # Standard YOLO model metrics
         results.update({
-            'box_mean_precision': metrics["Box Precision"],
-            'box_mean_recall': metrics["Box Recall"],
-            'box_mean_f1': metrics["Box F1"],
             'box_mAP@50': metrics["Box mAP@50"],
             'box_mAP@50-95': metrics["Box mAP@50-95"],
+            'box_mean_f1': metrics["Box F1"],
+            'box_mean_precision': metrics["Box Precision"],
+            'box_mean_recall': metrics["Box Recall"],
 
             # Set segmentation metrics to None for non-segmentation models
-            'seg_mean_precision': None,
-            'seg_mean_recall': None,
-            'seg_mean_f1': None,
             'seg_mAP@50': None,
             'seg_mAP@50-95': None,
+            'seg_mean_f1': None,
+            'seg_mean_precision': None,
+            'seg_mean_recall': None,
         })
     else:
         # YOLO-E model metrics (includes segmentation)
         results.update({
-            'box_mean_precision': metrics["Box Precision"],
-            'box_mean_recall': metrics["Box Recall"],
-            'box_mean_f1': metrics["Box F1"],
             'box_mAP@50': metrics["Box mAP@50"],
             'box_mAP@50-95': metrics["Box mAP@50-95"],
+            'box_mean_f1': metrics["Box F1"],
+            'box_mean_precision': metrics["Box Precision"],
+            'box_mean_recall': metrics["Box Recall"],
 
-            'seg_mean_precision': metrics["Mask Precision"],
-            'seg_mean_recall': metrics["Mask Recall"],
-            'seg_mean_f1': np.mean(np.array(metrics["Mask F1"])),
             'seg_mAP@50': metrics["Mask mAP@50"],
             'seg_mAP@50-95': metrics["Mask mAP@50-95"],
+            'seg_mean_f1': np.mean(np.array(metrics["Mask F1"])),
+            'seg_mean_precision': metrics["Mask Precision"],
+            'seg_mean_recall': metrics["Mask Recall"],
         })
 
     # Convert to DataFrame
@@ -328,3 +328,154 @@ def plot(MODEL, combined_images):
     plt.savefig(f"{fig_root}/plot_{MODEL}.png", bbox_inches="tight", pad_inches=0)
     # plt.show()
     plt.close()
+
+
+def prepare_single_image_all_models(image_folder, label_folder, image_index=0):
+    """
+    Prepare a single image with ground truth and predictions from all models
+
+    Args:
+        image_folder: Path to images folder
+        label_folder: Path to labels folder
+        image_index: Index of image to use (default: 0 for first image)
+
+    Returns:
+        List of combined images (GT + Prediction) for each model
+    """
+    # Get image files and select one
+    images = get_file_names(image_folder, 10)  # Get more files to have options
+    if image_index >= len(images):
+        image_index = 0  # Fallback to first image
+
+    img_file = images[image_index]
+    img_path = os.path.join(image_folder, img_file)
+    label_path = os.path.join(label_folder, os.path.splitext(img_file)[0] + ".txt")
+
+    # Color map
+    colors = [tuple(map(int, np.array(c[:3])[::-1] * 255)) for c in plt.get_cmap("tab10").colors]
+
+    # Load and prepare base image
+    img = cv2.imread(img_path)
+    img = cv2.resize(img, (640, 640))
+
+    # Load ground truth once
+    gt_boxes = load_yolo_labels(label_path)
+
+    model_names = ["rtdetr", "yolo8", "yolo9", "yolo10", "yolo11", "yolo12", "yoloe", "yolow"]
+    combined_images = []
+
+    for model_name in model_names:
+        # Load model
+        model = load_model_test(model_name)
+        class_names = model.names
+
+        # Prepare copies for this model
+        img_gt = img.copy()
+        img_pred = img.copy()
+
+        # Ground truth (same for all models)
+        img_gt = draw_boxes(img_gt, gt_boxes, colors, class_names)
+        cv2.putText(img_gt, "Ground Truth", (10, 35),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 3)
+
+        # Prediction for this model
+        results = model(img_path)[0]
+        pred_boxes = []
+        for cls, xywh in zip(results.boxes.cls, results.boxes.xywh):
+            cls = int(cls.item())
+            x, y, w, h = xywh.tolist()
+            pred_boxes.append((cls, x / results.orig_shape[1], y / results.orig_shape[0],
+                               w / results.orig_shape[1], h / results.orig_shape[0]))
+
+        img_pred = draw_boxes(img_pred, pred_boxes, colors, class_names)
+        cv2.putText(img_pred, f"{model_name.upper()}", (10, 35),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 3)
+
+        # Combine horizontally: [GT | Prediction]
+        combined = np.hstack((img_gt, img_pred))
+        combined_rgb = cv2.cvtColor(combined, cv2.COLOR_BGR2RGB)
+        combined_images.append(combined_rgb)
+
+        print(f"Processed {model_name}")
+
+    return combined_images, img_file
+
+
+def plot_all_models_single_image(combined_images, image_filename):
+    """
+    Plot all 8 models' inferences on a single image in one figure with separating lines
+
+    Args:
+        combined_images: List of combined images (GT + Prediction) for each model
+        image_filename: Name of the source image file
+    """
+    num_models = len(combined_images)  # Should be 8
+    cols = 2  # Number of columns in final plot
+    rows = math.ceil(num_models / cols)  # Should be 4 rows
+
+    # Get dimensions
+    h, w, _ = combined_images[0].shape
+    line_thickness = 4  # Thickness of separator lines
+
+    # Create grid rows with horizontal separators
+    grid_rows = []
+    for i in range(rows):
+        row_imgs = combined_images[i * cols:(i + 1) * cols]
+
+        # If row is not complete, add empty images
+        while len(row_imgs) < cols:
+            empty_img = np.zeros((h, w, 3), dtype=np.uint8)
+            row_imgs.append(empty_img)
+
+        # Add vertical separator between images in the row
+        row_with_separators = []
+        for j, img in enumerate(row_imgs):
+            row_with_separators.append(img)
+            # Add vertical separator (except for last image in row)
+            if j < len(row_imgs) - 1:
+                vertical_separator = np.ones((h, line_thickness, 3), dtype=np.uint8) * 255  # White line
+                row_with_separators.append(vertical_separator)
+
+        row = np.hstack(row_with_separators)
+        grid_rows.append(row)
+
+        # Add horizontal separator (except for last row)
+        if i < rows - 1:
+            horizontal_separator = np.ones((line_thickness, row.shape[1], 3), dtype=np.uint8) * 255  # White line
+            grid_rows.append(horizontal_separator)
+
+    # Stack all rows vertically
+    final_image = np.vstack(grid_rows)
+
+    plt.figure(figsize=(16, num_models * 2.5))  # Adjust height based on number of models
+    plt.imshow(final_image)
+    plt.axis("off")
+    plt.title(f"All Models Inference Comparison - {image_filename}", fontsize=16, pad=20)
+    plt.tight_layout(pad=0)
+
+    # Save with descriptive filename
+    safe_filename = os.path.splitext(image_filename)[0]
+    plt.savefig(f"{fig_root}/all_models_comparison_{safe_filename}.png",
+                bbox_inches="tight", pad_inches=0, dpi=150)
+    plt.close()
+    print(f"Saved comparison plot to {fig_root}/all_models_comparison_{safe_filename}.png")
+
+
+# Main function to use in your script
+def create_all_models_comparison(image_folder, label_folder, image_index=0):
+    """
+    Create a comparison plot showing all 8 models' inferences on a single image
+
+    Args:
+        image_folder: Path to images folder
+        label_folder: Path to labels folder
+        image_index: Which image to use (default: 0 for first image)
+    """
+    print(f"Creating all-models comparison for image index {image_index}...")
+    combined_images, image_filename = prepare_single_image_all_models(
+        image_folder, label_folder, image_index
+    )
+    plot_all_models_single_image(combined_images, image_filename)
+    print("All-models comparison complete!")
+
+

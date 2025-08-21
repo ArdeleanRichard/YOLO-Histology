@@ -1,9 +1,11 @@
 import json
 import os
-from PIL import Image
+from PIL import Image, ImageDraw
 import numpy as np
 from pathlib import Path
 import cv2
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 
 
 def polygon_to_bbox(vertices):
@@ -38,6 +40,162 @@ def normalize_bbox(bbox, img_width, img_height):
     height_norm = height / img_height
 
     return x_center_norm, y_center_norm, width_norm, height_norm
+
+
+def yolo_to_bbox(x_center_norm, y_center_norm, width_norm, height_norm, img_width, img_height):
+    """Convert YOLO format back to pixel coordinates for visualization"""
+    # Denormalize
+    x_center = x_center_norm * img_width
+    y_center = y_center_norm * img_height
+    width = width_norm * img_width
+    height = height_norm * img_height
+
+    # Calculate corners
+    x_min = x_center - width / 2
+    y_min = y_center - height / 2
+
+    return x_min, y_min, width, height
+
+
+def visualize_annotations(processed_img_path, original_json_path, output_path=None, scale_factor=0.05):
+    """
+    Visualize original polygon annotations vs converted YOLO bounding boxes on processed images
+
+    Args:
+        processed_img_path (str): Path to the processed/downsampled image file
+        original_json_path (str): Path to the original JSON annotation file
+        output_path (str): Path to save the visualization (if None, will show instead)
+        scale_factor (float): Scale factor used for downsampling (to scale the polygons)
+    """
+
+    # Load processed image
+    img_small = Image.open(processed_img_path)
+    new_width, new_height = img_small.size
+
+    # Load annotations
+    with open(original_json_path, 'r') as f:
+        annotations = json.load(f)
+
+    # Create figure with two subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 8))
+
+    # Left subplot: Original image with polygon annotations
+    ax1.imshow(img_small)
+    ax1.set_title('Original Polygon Annotations', fontsize=14, fontweight='bold')
+    ax1.axis('off')
+
+    # Draw polygons on original image
+    polygon_count = 0
+
+    # Process positive regions (red polygons)
+    positive_regions = annotations.get("positive", [])
+    for region in positive_regions:
+        vertices = region.get("vertices", [])
+        if vertices:
+            # Scale vertices to match downsampled image
+            scaled_vertices = [(x * scale_factor, y * scale_factor) for x, y in vertices]
+
+            if len(scaled_vertices) >= 3:  # Need at least 3 points for a polygon
+                polygon = patches.Polygon(scaled_vertices, linewidth=2, edgecolor='red',
+                                          facecolor='red', alpha=0.3, label='Positive' if polygon_count == 0 else "")
+                ax1.add_patch(polygon)
+                polygon_count += 1
+
+    # Process negative regions (blue polygons)
+    negative_regions = annotations.get("negative", [])
+    negative_count = 0
+    for region in negative_regions:
+        vertices = region.get("vertices", [])
+        if vertices:
+            # Scale vertices to match downsampled image
+            scaled_vertices = [(x * scale_factor, y * scale_factor) for x, y in vertices]
+
+            if len(scaled_vertices) >= 3:  # Need at least 3 points for a polygon
+                polygon = patches.Polygon(scaled_vertices, linewidth=2, edgecolor='blue',
+                                          facecolor='blue', alpha=0.3, label='Negative' if negative_count == 0 else "")
+                ax1.add_patch(polygon)
+                negative_count += 1
+
+    # Right subplot: Downsampled image with YOLO bounding boxes
+    ax2.imshow(img_small)
+    ax2.set_title('Converted YOLO Bounding Boxes', fontsize=14, fontweight='bold')
+    ax2.axis('off')
+
+    # Convert annotations to YOLO format and draw bounding boxes
+    bbox_count = 0
+
+    # Process positive regions (class 0 - green boxes)
+    for region in positive_regions:
+        vertices = region.get("vertices", [])
+        if vertices:
+            # Scale vertices to match downsampled image
+            scaled_vertices = [(x * scale_factor, y * scale_factor) for x, y in vertices]
+
+            # Convert polygon to bounding box
+            bbox = polygon_to_bbox(scaled_vertices)
+            if bbox:
+                x_min, y_min, x_max, y_max = bbox
+
+                # Draw bounding box
+                width = x_max - x_min
+                height = y_max - y_min
+                rect = patches.Rectangle((x_min, y_min), width, height, linewidth=2,
+                                         edgecolor='lime', facecolor='none',
+                                         label='Positive' if bbox_count == 0 else "")
+                ax2.add_patch(rect)
+                bbox_count += 1
+
+    # Process negative regions (class 1 - orange boxes)
+    bbox_neg_count = 0
+    for region in negative_regions:
+        vertices = region.get("vertices", [])
+        if vertices:
+            # Scale vertices to match downsampled image
+            scaled_vertices = [(x * scale_factor, y * scale_factor) for x, y in vertices]
+
+            # Convert polygon to bounding box
+            bbox = polygon_to_bbox(scaled_vertices)
+            if bbox:
+                x_min, y_min, x_max, y_max = bbox
+
+                # Draw bounding box
+                width = x_max - x_min
+                height = y_max - y_min
+                rect = patches.Rectangle((x_min, y_min), width, height, linewidth=2,
+                                         edgecolor='orange', facecolor='none',
+                                         label='Negative BBox' if bbox_neg_count == 0 else "")
+                ax2.add_patch(rect)
+                bbox_neg_count += 1
+
+    # Add legends
+    if polygon_count > 0 or negative_count > 0:
+        ax1.legend(loc='upper right', bbox_to_anchor=(1, 1))
+    if bbox_count > 0 or bbox_neg_count > 0:
+        ax2.legend(loc='upper right', bbox_to_anchor=(1, 1))
+
+    # Add image information
+    fig.suptitle(f'Annotation Conversion Visualization',
+                 fontsize=16, fontweight='bold')
+
+    plt.tight_layout()
+
+    # Save or show the figure
+    if output_path:
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        print(f"Visualization saved to: {output_path}")
+    else:
+        plt.show()
+
+    # Clean up
+    img_small.close()
+    plt.close(fig)
+
+    return {
+        'positive_polygons': len(positive_regions),
+        'negative_polygons': len(negative_regions),
+        'positive_bboxes': bbox_count,
+        'negative_bboxes': bbox_neg_count
+    }
 
 
 def process_bcnb_dataset(original_images_dir, output_dir, scale_factor=0.05, resampling_method="box"):
@@ -224,21 +382,41 @@ def verify_dataset(output_dir):
 
 # Example usage
 if __name__ == "__main__":
-    # Configuration
+    # # Configuration
     ORIGINAL_IMAGES_DIR = "./original_images"  # Folder with original images and JSON files
     OUTPUT_DIR = "./"  # Output directory for processed dataset
     SCALE_FACTOR = 0.05  # 5% of original size - adjust as needed
     RESAMPLING_METHOD = "box"  # "box" (area averaging) recommended for histology
 
-    # Process the dataset
-    process_bcnb_dataset(ORIGINAL_IMAGES_DIR, OUTPUT_DIR, SCALE_FACTOR, RESAMPLING_METHOD)
+    # # Process the dataset
+    # process_bcnb_dataset(ORIGINAL_IMAGES_DIR, OUTPUT_DIR, SCALE_FACTOR, RESAMPLING_METHOD)
+    #
+    # # Verify the results
+    # verify_dataset(OUTPUT_DIR)
+    #
+    #
+    # print(f"\nYour dataset is ready for YOLO training!")
+    # print(f"Dataset structure:")
+    # print(f"  {OUTPUT_DIR}/")
+    # print(f"  ├── images/        # Downsampled images")
+    # print(f"  ├── labels/        # YOLO format annotations")
+    # print(f"  └── classes.txt    # Class names")
 
-    # Verify the results
-    verify_dataset(OUTPUT_DIR)
 
-    print(f"\nYour dataset is ready for YOLO training!")
-    print(f"Dataset structure:")
-    print(f"  {OUTPUT_DIR}/")
-    print(f"  ├── images/        # Downsampled images")
-    print(f"  ├── labels/        # YOLO format annotations")
-    print(f"  └── classes.txt    # Class names")
+    # Example: Visualize a single processed image's annotations
+    processed_img_path = "./images/train/1.jpg"  # Path to processed image
+    original_json_path = "./original_images/1.json"  # Path to original JSON
+    viz_output_path = "./visualization_sample.png"  # Where to save the visualization
+
+    print("\nCreating visualization...")
+    stats = visualize_annotations(
+        processed_img_path=processed_img_path,
+        original_json_path=original_json_path,
+        output_path=viz_output_path,
+        scale_factor=SCALE_FACTOR
+    )
+
+    print(f"Visualization stats: {stats}")
+
+    print(f"\nTo visualize annotations for a specific image, use:")
+    print(f"visualize_annotations('path/to/processed_image.jpg', 'path/to/original_annotations.json', 'output_viz.png')")
