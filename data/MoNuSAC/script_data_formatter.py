@@ -61,6 +61,9 @@ def convert_to_yolo_format(bbox, img_width, img_height):
     width /= img_width
     height /= img_height
 
+    if center_x > 1:
+        pass
+
     return center_x, center_y, width, height
 
 
@@ -90,13 +93,19 @@ def parse_xml_annotation(xml_path, img_width, img_height):
         # Process all regions for this annotation
         regions = annotation.find('Regions')
         if regions is not None:
-            for region in regions.findall('Region'):
+            for r_id, region in enumerate(regions.findall('Region')):
                 vertices = region.find('Vertices')
                 if vertices is not None:
                     vertex_list = vertices.findall('Vertex')
                     if len(vertex_list) >= 3:  # Need at least 3 points for a polygon
                         # Convert polygon to bounding box
                         bbox = polygon_to_bbox(vertex_list)
+
+                        # Check out of image bbox (from vertices)
+                        x_min, y_min, x_max, y_max = bbox
+                        if x_min > img_width or x_max > img_width or y_min > img_height or y_max > img_height:
+                            print(f"ERROR: Out of image region {r_id+1} in image {xml_path}")
+                            continue
 
                         # Convert to YOLO format
                         yolo_bbox = convert_to_yolo_format(bbox, img_width, img_height)

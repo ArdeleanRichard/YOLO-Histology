@@ -208,9 +208,16 @@ def compare_annotations(image_path, xml_path, yolo_path, figsize=(15, 7)):
 
 # Example usage:
 if __name__ == "__main__":
-    # Replace these paths with your actual file paths
-    image_path = "./images/train/TCGA-5P-A9K0-01Z-00-DX1_1.tif"
-    xml_path = "./original_images/MoNuSAC_images_and_annotations/TCGA-5P-A9K0-01Z-00-DX1/TCGA-5P-A9K0-01Z-00-DX1_1.xml"
-    yolo_path = "./labels/train/TCGA-5P-A9K0-01Z-00-DX1_1.txt"
+    file_name = "TCGA-5P-A9K0-01Z-00-DX1_1"
+    folder_name=file_name.split("_")[0]
+    image_path = f"./images/train/{file_name}.tif"
+    xml_path = f"./original_images/MoNuSAC_images_and_annotations/{folder_name}/{file_name}.xml"
+    yolo_path = f"./labels/train/{file_name}.txt"
+
+    # file_name = "TCGA-DW-7838-01Z-00-DX1_1"
+    # folder_name=file_name.split("_")[0]
+    # image_path = f"./images/val/{file_name}.tif"
+    # xml_path = f"./original_images/MoNuSAC Testing Data and Annotations/{folder_name}/{file_name}.xml"
+    # yolo_path = f"./labels/val/{file_name}.txt"
 
     compare_annotations(image_path, xml_path, yolo_path)

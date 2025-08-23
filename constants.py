@@ -6,7 +6,7 @@ import os
 MODEL = "yolow"
 
 # DATA OPTIONS: ["BCNB", "nuclei", "TNBC", "MoNuSAC", "CryoNuSeg"]
-DATA = "TNBC"
+DATA = "MoNuSAC"
 
 data_root = f"./data/{DATA}/"
 result_root = f"./results_data_{DATA}/"
