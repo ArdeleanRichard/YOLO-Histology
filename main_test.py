@@ -19,5 +19,3 @@ if __name__ == "__main__":
 
     # Save results to CSV
     evaluator.save_results_to_csv(RESULTS_CSV_PATH)
-
-    print(f"\nResults for model '{MODEL}' on dataset '{DATA}' have been saved.")

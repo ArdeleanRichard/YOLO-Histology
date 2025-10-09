@@ -16,13 +16,8 @@ Elsevier Computers in Biology and Medicine
 - eISSN: 1879-0534
 
 COMPUTATIONAL BIOLOGY AND CHEMISTRY
+- Site: https://www.sciencedirect.com/journal/computational-biology-and-chemistry
 - Q1: https://wos-journal.info/journalid/14813
 - Domains: BIOLOGY + COMPUTER SCIENCE, INTERDISCIPLINARY APPLICATIONS
 - ISSN: 1476-9271
 - eISSN: 1476-928X
-
-COMPUTERS IN BIOLOGY AND MEDICINE
-- Q1: https://wos-journal.info/journalid/2793
-- Domains: BIOLOGY + COMPUTER SCIENCE, INTERDISCIPLINARY APPLICATIONS
-- ISSN: 0010-4825
-- eISSN: 1879-0534

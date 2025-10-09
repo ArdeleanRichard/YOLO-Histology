@@ -1,6 +1,6 @@
 import torch
 
-from constants import DATA, result_root
+from constants import DATA, result_root, ALL_MODELS
 from functions import ModelEvaluator
 
 if __name__ == "__main__":
@@ -8,7 +8,7 @@ if __name__ == "__main__":
 
     RESULTS_CSV_PATH = f"{result_root}/results.csv"
 
-    for MODEL_NAME in ["rtdetr", "yolo8", "yolo9", "yolo10", "yolo11", "yolo12", "yoloe", "yolow"]:
+    for MODEL_NAME in ALL_MODELS:
         evaluator = ModelEvaluator(MODEL_NAME, DATA, device, conf=0.25, iou=0.5)
         evaluator.load_model()
 
@@ -20,5 +20,3 @@ if __name__ == "__main__":
 
         # Save results to CSV
         evaluator.save_results_to_csv(RESULTS_CSV_PATH)
-
-        print(f"\nResults for model '{MODEL_NAME}' on dataset '{DATA}' have been saved.")

@@ -1,14 +1,14 @@
 # May require: pip install git+https://github.com/openai/CLIP.git
 from ultralytics.models.yolo.yoloe import YOLOEPESegTrainer
 
-from constants import dataset_yaml_path, dataset_SEG_yaml_path, result_root
+from constants import dataset_yaml_path, dataset_SEG_yaml_path, result_root, ALL_MODELS
 from functions import load_model_train
 
 if __name__ == '__main__':
     # If needed for frozen executables, uncomment the next line:
     # from multiprocessing import freeze_support; freeze_support()
 
-    for MODEL in ["rtdetr", "yolo8", "yolo9", "yolo10", "yolo11", "yolo12", "yoloe", "yolow"]:
+    for MODEL in ALL_MODELS:
         model, model_name, model_path = load_model_train(MODEL)
         print(model.names)
 

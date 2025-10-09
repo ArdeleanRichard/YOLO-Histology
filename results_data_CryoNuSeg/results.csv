@@ -1,13 +1,9 @@
 dataset,model,box_mAP@50,box_mAP@50-95,box_mean_f1,box_mean_precision,box_mean_recall,seg_mAP@50,seg_mAP@50-95,seg_mean_f1,seg_mean_precision,seg_mean_recall
 CryoNuSeg,rtdetr,0.031,0.014,0.072,0.056,0.104,,,,,
 CryoNuSeg,yolo8,0.773,0.469,0.737,0.727,0.748,,,,,
-CryoNuSeg,yolo9,0.746,0.453,0.711,0.690,0.733,,,,,
+CryoNuSeg,yolo9,0.746,0.453,0.711,0.69,0.733,,,,,
 CryoNuSeg,yolo10,0.675,0.455,0.668,0.694,0.643,,,,,
 CryoNuSeg,yolo11,0.781,0.506,0.762,0.767,0.757,,,,,
-CryoNuSeg,yolo12,0.704,0.407,0.695,0.702,0.688,,,,,
-CryoNuSeg,yoloe,0.747,0.425,0.720,0.724,0.717,0.707,0.358,0.685,0.711,0.661
-CryoNuSeg,yolow,0.754,0.419,0.724,0.745,0.705,,,,,
-,,,,,,,,,,,
 CryoNuSeg,yolo12,0.781,0.499,0.744,0.759,0.730,,,,,
-CryoNuSeg,yoloe,0.678,0.359,0.681,0.760,0.617,0.680,0.380,0.686,0.765,0.622
-CryoNuSeg,yolow,0.512,0.252,0.049,1.000,0.025,,,,,
+CryoNuSeg,yoloe,0.752,0.423,0.714,0.725,0.703,0.712,0.352,0.678,0.715,0.644
+CryoNuSeg,yolow,0.754,0.419,0.724,0.745,0.705,,,,,

@@ -176,7 +176,7 @@ class ModelEvaluator(ModelLoader):
 
         # Save to CSV
         df_combined.to_csv(csv_path, index=False)
-        print(f"Results saved to {csv_path}")
+        print(f"Results of '{self.model_name}' saved to: {csv_path}\n")
 
     def print_metrics(self):
         """
