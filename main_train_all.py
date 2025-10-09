@@ -1,12 +1,10 @@
+# May require: pip install git+https://github.com/openai/CLIP.git
 from ultralytics.models.yolo.yoloe import YOLOEPESegTrainer
 
 from constants import dataset_yaml_path, dataset_SEG_yaml_path, result_root
-# from constants MODEL
 from functions import load_model_train
 
 if __name__ == '__main__':
-    # May require: pip install git+https://github.com/openai/CLIP.git
-
     # If needed for frozen executables, uncomment the next line:
     # from multiprocessing import freeze_support; freeze_support()
 

@@ -1,9 +1,11 @@
+# May require: pip install git+https://github.com/openai/CLIP.git
 from ultralytics.models.yolo.yoloe import YOLOEPESegTrainer
 
 from constants import dataset_yaml_path, dataset_SEG_yaml_path, result_root, MODEL
 from functions import load_model_train
 
 if __name__ == '__main__':
+
     # If needed for frozen executables, uncomment the next line:
     # from multiprocessing import freeze_support; freeze_support()
 
@@ -51,8 +53,8 @@ if __name__ == '__main__':
         name=model_name,        # experiment name
     )
     print(model.names)
-
     print("Training completed.")
+
     # Save the current state of the model to a file.
     model.save(model_path)
 

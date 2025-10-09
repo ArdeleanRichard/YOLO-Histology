@@ -1,18 +1,19 @@
-from constants import image_folder, label_folder
-from functions import load_model_test, prepare_images, plot, create_all_models_comparison
+from functions import ModelPlotter, ResultPlotter
 
 if __name__ == "__main__":
-    for MODEL in ["rtdetr", "yolo8", "yolo9", "yolo10", "yolo11", "yolo12", "yoloe", "yolow"]:
+    all_models = ["rtdetr", "yolo8", "yolo9", "yolo10", "yolo11", "yolo12", "yoloe", "yolow"]
+
+    for MODEL in all_models:
         # === LOAD MODEL ===
-        model = load_model_test(MODEL)
-        class_names = model.names
-        num_classes = len(class_names)
+        plotter = ModelPlotter(MODEL)
+        plotter.load_model()
 
         # === IMAGES ===
-        combined_images = prepare_images(model, image_folder, label_folder, class_names)
-        plot(MODEL, combined_images)
+        plotter.prepare_images()
+        plotter.plot()
 
     # Create comparison plots
-    create_all_models_comparison(image_folder, label_folder, image_index=0)
-    # create_all_models_comparison(image_folder, label_folder, image_index=1)
-    # create_all_models_comparison(image_folder, label_folder, image_index=2)
+    plotter = ResultPlotter(all_models)
+    plotter.create_all_models_comparison(image_index=0)
+    # plotter.create_all_models_comparison(image_index=1)
+    # plotter.create_all_models_comparison(image_index=2)
