@@ -12,6 +12,8 @@ if __name__ == '__main__':
     model, model_name, model_path = load_model_train(MODEL)
     print(model.names)
 
+
+    os.makedirs(f"{result_root}/runs_train/{MODEL}/", exist_ok=True)
     # Train the model with enhanced parameters and augmentation
     results = model.train(
         data=dataset_yaml_path if MODEL != "yoloe" else dataset_SEG_yaml_path,  # dataset YAML config
@@ -49,7 +51,7 @@ if __name__ == '__main__':
 
         # Save best model during training
         save_period=10,         # save checkpoint every x epochs
-        project=f"{result_root}/runs_train/",
+        project=f"{result_root}/runs_train/{MODEL}/",
         name=model_name,        # experiment name
     )
     print(model.names)
