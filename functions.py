@@ -365,6 +365,18 @@ class ResultPlotter(PlotHelper, ModelLoader):
         # Load ground truth once
         gt_boxes = self.load_yolo_labels(label_path)
 
+        map_names = {
+            "rtdetr": "RT-DETR",
+            "yolo8": "YOLOv8",
+            "yolo9": "YOLOv9",
+            "yolo10": "YOLOv10",
+            "yolo11": "YOLOv11",
+            "yolo12": "YOLOv12",
+            "yoloe": "YOLOE",
+            "yolow": "YOLOWorld",
+        }
+
+        text_color = (255, 255, 255)
         combined_images = []
         for model_name in self.model_names:
             # Load model
@@ -379,8 +391,8 @@ class ResultPlotter(PlotHelper, ModelLoader):
 
             # Ground truth (same for all models)
             img_gt = self.draw_boxes(img_gt, gt_boxes, self.colors, class_names)
-            cv2.putText(img_gt, "Ground Truth", (10, 35),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 3)
+            # cv2.putText(img_gt, "Ground Truth", (10, 35), cv2.FONT_HERSHEY_SIMPLEX, 1.0, text_color, 3)
+            cv2.putText(img_gt, "Ground Truth", (10, img_gt.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 1.0, text_color, 3)
 
             # Prediction for this model
             results = self.model(img_path)[0]
@@ -388,15 +400,20 @@ class ResultPlotter(PlotHelper, ModelLoader):
             for cls, xywh in zip(results.boxes.cls, results.boxes.xywh):
                 cls = int(cls.item())
                 x, y, w, h = xywh.tolist()
-                pred_boxes.append((cls, x / results.orig_shape[1], y / results.orig_shape[0],
-                                   w / results.orig_shape[1], h / results.orig_shape[0]))
+                pred_boxes.append((cls, x / results.orig_shape[1], y / results.orig_shape[0], w / results.orig_shape[1], h / results.orig_shape[0]))
 
             img_pred = self.draw_boxes(img_pred, pred_boxes, self.colors, class_names)
-            cv2.putText(img_pred, f"{model_name.upper()}", (10, 35),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 3)
+            # cv2.putText(img_pred, f"{model_name.upper()}", (10, 35), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 3)
+            # cv2.putText(img_pred, f"{map_names[model_name]}", (10, 35), cv2.FONT_HERSHEY_SIMPLEX, 1.0, text_color, 3)
+            cv2.putText(img_pred, f"{map_names[model_name]}", (10, img_gt.shape[0] - 10), cv2.FONT_HERSHEY_SIMPLEX, 1.0, text_color, 3)
 
+            # Assuming img_gt and img_pred are HxWxC
+            separator = np.full((img_gt.shape[0], 1, img_gt.shape[2]), 255, dtype=img_gt.dtype)
+
+            # Combine horizontally with separator
             # Combine horizontally: [GT | Prediction]
-            combined = np.hstack((img_gt, img_pred))
+            # combined = np.hstack((img_gt, img_pred))
+            combined = np.hstack((img_gt, separator, img_pred))
             combined_rgb = cv2.cvtColor(combined, cv2.COLOR_BGR2RGB)
             combined_images.append(combined_rgb)
 
@@ -452,13 +469,12 @@ class ResultPlotter(PlotHelper, ModelLoader):
         plt.figure(figsize=(16, num_models * 2.5))  # Adjust height based on number of models
         plt.imshow(final_image)
         plt.axis("off")
-        plt.title(f"All Models Inference Comparison - {self.image_filename}", fontsize=16, pad=20)
+        # plt.title(f"All Models Inference Comparison - {self.image_filename}", fontsize=16, pad=20)
         plt.tight_layout(pad=0)
 
         # Save with descriptive filename
         safe_filename = os.path.splitext(self.image_filename)[0]
-        plt.savefig(f"{fig_root}/visualization_{safe_filename}.png",
-                    bbox_inches="tight", pad_inches=0, dpi=150)
+        plt.savefig(f"{fig_root}/visualization_{safe_filename}.png", bbox_inches="tight", pad_inches=0, dpi=150)
         plt.close()
         print(f"Saved comparison plot to {fig_root}/visualization_{safe_filename}.png")
 
