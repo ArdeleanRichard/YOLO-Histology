@@ -1,25 +1,81 @@
-MDPI Biology:
-- Site: https://www.mdpi.com/journal/biology
-- Q1: https://wos-journal.info/journalid/13138
-- Domains: BIOLOGY
-- eISSN: 2079-7737
-
--Special issues:
--- Machine Learning Applications in Biology—2nd Edition: https://www.mdpi.com/journal/biology/special_issues/4G7016877B
--- Methods in Bioinformatics and Computational Biology: https://www.mdpi.com/journal/biology/special_issues/O7EHHA2V57
-
-
 Elsevier Computers in Biology and Medicine
 - Site: https://www.sciencedirect.com/journal/computers-in-biology-and-medicine
-- Q1: https://wos-journal.info/journalid/2793
-- Domains: BIOLOGY + COMPUTER SCIENCE, INTERDISCIPLINARY APPLICATIONS
+- Ranking: Q1 - https://wos-journal.info/journalid/2793
+- Domains: [Q1/Q1 (BIOLOGY) + Q1/Q1 (COMPUTER SCIENCE, INTERDISCIPLINARY APPLICATION)]
 - ISSN: 0010-4825
 - eISSN: 1879-0534
 
 
 COMPUTATIONAL BIOLOGY AND CHEMISTRY
 - Site: https://www.sciencedirect.com/journal/computational-biology-and-chemistry
-- Q1: https://wos-journal.info/journalid/14813
-- Domains: BIOLOGY + COMPUTER SCIENCE, INTERDISCIPLINARY APPLICATIONS
+- Ranking: Q1 - https://wos-journal.info/journalid/14813
+- Domains: [Q1/Q2 (BIOLOGY) + Q2/Q3 (COMPUTER SCIENCE, INTERDISCIPLINARY APPLICATION)]
 - ISSN: 1476-9271
 - eISSN: 1476-928X
+
+
+
+
+Journal of Molecular Graphics & Modelling
+- Site: 
+- Ranking: Q1: https://wos-journal.info/journalid/16484
+- Domains: Q2/Q4 (Mathematical & Computational Biology) + Q2/Q3 (Computer Science, Interdisciplinary Applications)
+- ISSN: 1093-3263
+- eISSN: 1873-4243
+
+
+
+
+Journal of Biomedical Informatics
+- Site: 
+- Ranking: Q2 - https://wos-journal.info/journalid/401
+- Domains: Q2/Q1 (Medical Informatics) + Q2/Q1 (Computer Science, Interdisciplinary Applications)
+- ISSN: 1532-0464
+- eISSN: 1532-0480
+
+
+Computer Methods and Programs in Biomedicine
+- Site: 
+- Ranking: Q1 - https://wos-journal.info/journalid/2681
+- Domains: Q1/Q2 (Medical Informatics) + Q2/Q2 (Computer Science related)
+- ISSN: 0169-2607
+- eISSN: 1872-7565
+
+
+
+Interdisciplinary Sciences: Computational Life Sciences
+- Site: 
+- Ranking: Q1 - https://wos-journal.info/journalid/15409
+- Domains: Q1/Q3 (Mathematical & Computational Biology)
+- ISSN: 1913-2751
+- eISSN: 1867-1462
+
+
+
+
+Journal of Computational Biology
+- Site:
+- Ranking: Q2: https://wos-journal.info/journalid/20577
+- Domains: Q4/Q3 (Mathematical & Computational Biology) + Q4/Q3 (Computer Science, Interdisciplinary Applications)
+- ISSN: 1066-5277
+- eISSN: 1557-8666
+
+
+Journal of Molecular Modeling
+- Site:
+- Ranking: Q3:https://wos-journal.info/journalid/18626
+- Domains: Q3 (Biochemistry & Molecular Biology) + Q4 (Computer Science, Interdisciplinary Applications)
+- ISSN: 1610-2940
+- eISSN: 0948-5023
+
+
+
+MDPI Biology:
+- Site: https://www.mdpi.com/journal/biology
+- Ranking: Q1: https://wos-journal.info/journalid/13138
+- Domains: BIOLOGY
+- eISSN: 2079-7737
+
+-Special issues:
+-- Machine Learning Applications in Biology—2nd Edition: https://www.mdpi.com/journal/biology/special_issues/4G7016877B
+-- Methods in Bioinformatics and Computational Biology: https://www.mdpi.com/journal/biology/special_issues/O7EHHA2V57
