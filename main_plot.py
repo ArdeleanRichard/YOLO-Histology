@@ -1,4 +1,4 @@
-from constants import MODEL, image_folder, label_folder
+from constants import MODEL
 from functions import ModelPlotter
 
 if __name__ == "__main__":

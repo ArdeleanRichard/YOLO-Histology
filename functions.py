@@ -14,7 +14,8 @@ from constants import (yolo12_model_config, yolo12_model_path, yolo12_model_name
                        yolo11_model_config, yolo11_model_name, yolo11_model_path,
                        yoloe_model_config, yoloe_model_name, yoloe_model_path,
                        yoloworld_model_config, yoloworld_model_name, yoloworld_model_path,
-                       result_root, fig_root, dataset_yaml_path, dataset_SEG_yaml_path, image_folder, label_folder)
+                       results_root, results_fig_root, results_inf_root,
+                       dataset_yaml_path, dataset_SEG_yaml_path, image_folder, label_folder)
 
 
 
@@ -113,11 +114,11 @@ class ModelEvaluator(ModelLoader):
         """
         self.model.to(self.device)
 
-        os.makedirs(f"{result_root}/runs_test/{self.model_name}/", exist_ok=True)
+        os.makedirs(f"{results_root}/runs_test/{self.model_name}/", exist_ok=True)
 
         # Run YOLO validation on the dataset
         val_results = self.model.val(data=dataset_yaml_path if self.model_name != "yoloe" else dataset_SEG_yaml_path,
-                                     project=f"{result_root}/runs_test/{self.model_name}/",
+                                     project=f"{results_root}/runs_test/{self.model_name}/",
                                      conf=self.conf, iou=self.iou, split='test')
 
         self.metrics = {
@@ -324,7 +325,7 @@ class ModelPlotter(PlotHelper, ModelLoader):
         plt.imshow(final_image)
         plt.axis("off")
         plt.tight_layout(pad=0)
-        plt.savefig(f"{fig_root}/plot_{self.model_name}.png", bbox_inches="tight", pad_inches=0)
+        plt.savefig(f"{results_fig_root}/plot_{self.model_name}.png", bbox_inches="tight", pad_inches=0)
         # plt.show()
         plt.close()
 
@@ -474,9 +475,9 @@ class ResultPlotter(PlotHelper, ModelLoader):
 
         # Save with descriptive filename
         safe_filename = os.path.splitext(self.image_filename)[0]
-        plt.savefig(f"{fig_root}/visualization_{safe_filename}.png", bbox_inches="tight", pad_inches=0, dpi=150)
+        plt.savefig(f"{results_fig_root}/visualization_{safe_filename}.png", bbox_inches="tight", pad_inches=0, dpi=150)
         plt.close()
-        print(f"Saved comparison plot to {fig_root}/visualization_{safe_filename}.png")
+        print(f"Saved comparison plot to {results_fig_root}/visualization_{safe_filename}.png")
 
 
     def create_all_models_comparison(self, image_index=0):
@@ -490,3 +491,128 @@ class ResultPlotter(PlotHelper, ModelLoader):
         self.plot_all_models_single_image()
 
 
+class InferenceSaver(ModelLoader):
+    """
+    Class to save model inferences as YOLO-format .txt files
+    """
+
+    def __init__(self, model_name, conf=0.25, iou=0.45):
+        super().__init__(model_name)
+        self.conf = conf
+        self.iou = iou
+        self.output_dir = os.path.join(results_inf_root, self.model_name)
+
+    def save_all_inferences(self):
+        """
+        Run inference on all images and save predictions as YOLO-format .txt files
+
+        Args:
+            images_folder: Path to images folder (defaults to image_folder from constants)
+            labels_folder: Path to save labels (defaults to output_dir)
+        """
+        # Create output directory
+        os.makedirs(self.output_dir, exist_ok=True)
+
+        # Get all image files
+        image_files = [f for f in os.listdir(image_folder)
+                       if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.tif'))]
+
+        print(f"Processing {len(image_files)} images with {self.model_name}...")
+
+        for idx, img_file in enumerate(image_files, 1):
+            img_path = os.path.join(image_folder, img_file)
+
+            # Run inference
+            results = self.model(img_path, conf=self.conf, iou=self.iou, verbose=False)[0]
+
+            # Prepare output file path
+            base_name = os.path.splitext(img_file)[0]
+            output_path = os.path.join(self.output_dir, f"{base_name}.txt")
+
+            # Save predictions in YOLO format
+            self._save_inference(results, output_path)
+
+            if idx % 10 == 0 or idx == len(image_files):
+                print(f"  Processed {idx}/{len(image_files)} images")
+
+        print(f"Inferences saved to: {self.output_dir}\n")
+
+    def _save_yolo_format(self, results, output_path):
+        """
+        Save detection results in YOLO format (class x_center y_center width height)
+
+        Args:
+            results: YOLO results object
+            output_path: Path to save the .txt file
+        """
+        with open(output_path, 'w') as f:
+            if len(results.boxes) == 0:
+                # Empty file for images with no detections
+                pass
+            else:
+                for cls, xywh in zip(results.boxes.cls, results.boxes.xywh):
+                    cls_id = int(cls.item())
+                    x, y, w, h = xywh.tolist()
+
+                    # Normalize coordinates
+                    x_norm = x / results.orig_shape[1]
+                    y_norm = y / results.orig_shape[0]
+                    w_norm = w / results.orig_shape[1]
+                    h_norm = h / results.orig_shape[0]
+
+                    # Write in YOLO format: class x_center y_center width height
+                    f.write(f"{cls_id} {x_norm:.6f} {y_norm:.6f} {w_norm:.6f} {h_norm:.6f}\n")
+
+    def _save_inference(self, results, output_path):
+        """
+        Save detection results in YOLO format (class x_center y_center width height)
+
+        Args:
+            results: YOLO results object
+            output_path: Path to save the .txt file
+        """
+        with open(output_path, 'w') as f:
+            if len(results.boxes) == 0:
+                # Empty file for images with no detections
+                pass
+            else:
+                for cls, xywh, conf in zip(results.boxes.cls, results.boxes.xywh, results.boxes.conf):
+                    cls_id = int(cls.item())
+                    x, y, w, h = xywh.tolist()
+                    conf = float(conf.item())
+
+                    # Write in YOLO format: class x_center y_center width height
+                    f.write(f"{cls_id}, {int(x)}, {int(y)}, {int(w)}, {int(h)}, {conf}\n")
+
+
+class BatchInferenceSaver:
+    """
+    Class to save inferences for multiple models
+    """
+
+    def __init__(self, model_names, conf=0.25, iou=0.45):
+        self.model_names = model_names
+        self.conf = conf
+        self.iou = iou
+
+    def save_all_models_inferences(self):
+        """
+        Save inferences for all specified models
+        """
+
+        print(f"Saving inferences for {len(self.model_names)} models...")
+        print(f"Images folder: {image_folder}")
+        print(f"Output root: {results_inf_root}\n")
+
+        for model_name in self.model_names:
+            print(f"{'=' * 60}")
+            print(f"Model: {model_name.upper()}")
+            print(f"{'=' * 60}")
+
+            saver = InferenceSaver(model_name, conf=self.conf, iou=self.iou)
+            saver.load_model()
+            saver.save_all_inferences()
+
+        print(f"{'=' * 60}")
+        print("All inferences saved successfully!")
+        print(f"{'=' * 60}")

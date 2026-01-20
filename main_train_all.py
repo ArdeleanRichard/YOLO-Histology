@@ -1,7 +1,7 @@
 # May require: pip install git+https://github.com/openai/CLIP.git
 from ultralytics.models.yolo.yoloe import YOLOEPESegTrainer
 
-from constants import dataset_yaml_path, dataset_SEG_yaml_path, result_root, ALL_MODELS
+from constants import dataset_yaml_path, dataset_SEG_yaml_path, results_root, ALL_MODELS
 from functions import load_model_train
 
 if __name__ == '__main__':
@@ -12,7 +12,7 @@ if __name__ == '__main__':
         model, model_name, model_path = load_model_train(MODEL)
         print(model.names)
 
-        os.makedirs(f"{result_root}/runs_train/{MODEL}/", exist_ok=True)
+        os.makedirs(f"{results_root}/runs_train/{MODEL}/", exist_ok=True)
 
         # Train the model with enhanced parameters and augmentation
         results = model.train(
@@ -50,7 +50,7 @@ if __name__ == '__main__':
 
             # Save best model during training
             save_period=10,  # save checkpoint every x epochs
-            project=f"{result_root}/runs_train/{MODEL}/",
+            project=f"{results_root}/runs_train/{MODEL}/",
             name=model_name,  # experiment name
         )
         print(model.names)

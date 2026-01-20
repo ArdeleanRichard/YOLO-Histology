@@ -1,5 +1,5 @@
 dataset,model,box_mAP@50,box_mAP@50-95,box_mean_f1,box_mean_precision,box_mean_recall,seg_mAP@50,seg_mAP@50-95,seg_mean_f1,seg_mean_precision,seg_mean_recall
-nuclei,rtdetr,0,0,0,0,0,,,,,
+nuclei,rtdetr,0.0,0.0,0.0,0.0,0.0,,,,,
 nuclei,yolo8,0.362,0.214,0.342,0.504,0.259,,,,,
 nuclei,yolo9,0.37,0.226,0.39,0.48,0.329,,,,,
 nuclei,yolo10,0.353,0.218,0.379,0.439,0.334,,,,,
@@ -7,3 +7,4 @@ nuclei,yolo11,0.402,0.242,0.433,0.47,0.401,,,,,
 nuclei,yolo12,0.318,0.193,0.385,0.318,0.489,,,,,
 nuclei,yoloe,0.464,0.279,0.473,0.566,0.407,0.319,0.122,0.357,0.427,0.307
 nuclei,yolow,0.412,0.257,0.405,0.554,0.319,,,,,
+nuclei,rtdetr,0.0,0.0,0.0,0.0,0.0,,,,,
