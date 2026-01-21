@@ -6,3 +6,5 @@ opencv-python
 tqdm
 pillow
 pandas
+scikit-learn
+POT

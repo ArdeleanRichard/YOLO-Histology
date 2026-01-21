@@ -1,8 +1,4 @@
 import os
-import cv2
-cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
-# Supresses TIFF RNING global grfmt_tiff.cpp:122 cv::TIFF_Warning TIFFReadDirectory: Unknown field with tag 50838 (0xc696) encountered
-
 
 # === CONFIGURATION ===
 
@@ -10,7 +6,7 @@ cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
 MODEL = "yoloe"
 
 # DATA OPTIONS: ["BCNB", "nuclei", "TNBC", "MoNuSAC", "CryoNuSeg"]
-DATA = "CryoNuSeg"
+DATA = "nuclei"
 
 ALL_MODELS = ["rtdetr", "yolo8", "yolo9", "yolo10", "yolo11", "yolo12", "yoloe", "yolow"]
 data_root = f"./data/{DATA}/"

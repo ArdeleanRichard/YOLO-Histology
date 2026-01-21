@@ -505,10 +505,6 @@ class InferenceSaver(ModelLoader):
     def save_all_inferences(self):
         """
         Run inference on all images and save predictions as YOLO-format .txt files
-
-        Args:
-            images_folder: Path to images folder (defaults to image_folder from constants)
-            labels_folder: Path to save labels (defaults to output_dir)
         """
         # Create output directory
         os.makedirs(self.output_dir, exist_ok=True)
@@ -530,14 +526,14 @@ class InferenceSaver(ModelLoader):
             output_path = os.path.join(self.output_dir, f"{base_name}.txt")
 
             # Save predictions in YOLO format
-            self._save_inference(results, output_path)
+            self._save_inference_ints(results, output_path)
 
             if idx % 10 == 0 or idx == len(image_files):
                 print(f"  Processed {idx}/{len(image_files)} images")
 
         print(f"Inferences saved to: {self.output_dir}\n")
 
-    def _save_yolo_format(self, results, output_path):
+    def _save_inference_floats(self, results, output_path):
         """
         Save detection results in YOLO format (class x_center y_center width height)
 
@@ -563,7 +559,7 @@ class InferenceSaver(ModelLoader):
                     # Write in YOLO format: class x_center y_center width height
                     f.write(f"{cls_id} {x_norm:.6f} {y_norm:.6f} {w_norm:.6f} {h_norm:.6f}\n")
 
-    def _save_inference(self, results, output_path):
+    def _save_inference_ints(self, results, output_path):
         """
         Save detection results in YOLO format (class x_center y_center width height)
 
@@ -612,7 +608,3 @@ class BatchInferenceSaver:
             saver = InferenceSaver(model_name, conf=self.conf, iou=self.iou)
             saver.load_model()
             saver.save_all_inferences()
-
-        print(f"{'=' * 60}")
-        print("All inferences saved successfully!")
-        print(f"{'=' * 60}")
