@@ -8,7 +8,7 @@ if __name__ == "__main__":
 
     RESULTS_CSV_PATH = f"{results_root}/results.csv"
 
-    evaluator = ModelEvaluator(MODEL, DATA, device, conf=0.5, iou=0.5)
+    evaluator = ModelEvaluator(MODEL, DATA, device, conf=0.25, iou=0.5)
     evaluator.load_model()
 
     # Evaluate the model

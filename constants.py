@@ -3,7 +3,7 @@ import os
 # === CONFIGURATION ===
 
 # MODEL OPTIONS: ["rtdetr", "yolo8", "yolo9", "yolo10", "yolo11", "yolo12", "yoloe", "yolow"]
-MODEL = "yoloe"
+MODEL = "yolow"
 
 # DATA OPTIONS: ["BCNB", "nuclei", "TNBC", "MoNuSAC", "CryoNuSeg"]
 DATA = "nuclei"

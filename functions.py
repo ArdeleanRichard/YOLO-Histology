@@ -496,7 +496,7 @@ class InferenceSaver(ModelLoader):
     Class to save model inferences as YOLO-format .txt files
     """
 
-    def __init__(self, model_name, conf=0.25, iou=0.45):
+    def __init__(self, model_name, conf=0.25, iou=0.5):
         super().__init__(model_name)
         self.conf = conf
         self.iou = iou
@@ -579,32 +579,3 @@ class InferenceSaver(ModelLoader):
 
                     # Write in YOLO format: class x_center y_center width height
                     f.write(f"{cls_id}, {int(x)}, {int(y)}, {int(w)}, {int(h)}, {conf}\n")
-
-
-class BatchInferenceSaver:
-    """
-    Class to save inferences for multiple models
-    """
-
-    def __init__(self, model_names, conf=0.25, iou=0.45):
-        self.model_names = model_names
-        self.conf = conf
-        self.iou = iou
-
-    def save_all_models_inferences(self):
-        """
-        Save inferences for all specified models
-        """
-
-        print(f"Saving inferences for {len(self.model_names)} models...")
-        print(f"Images folder: {image_folder}")
-        print(f"Output root: {results_inf_root}\n")
-
-        for model_name in self.model_names:
-            print(f"{'=' * 60}")
-            print(f"Model: {model_name.upper()}")
-            print(f"{'=' * 60}")
-
-            saver = InferenceSaver(model_name, conf=self.conf, iou=self.iou)
-            saver.load_model()
-            saver.save_all_inferences()

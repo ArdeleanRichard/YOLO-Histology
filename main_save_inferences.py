@@ -1,5 +1,5 @@
 from constants import ALL_MODELS
-from functions import BatchInferenceSaver
+from functions import InferenceSaver
 
 
 if __name__ == "__main__":
@@ -8,11 +8,14 @@ if __name__ == "__main__":
     iou = 0.5  # IoU threshold for NMS
 
     # Create batch inference saver
-    batch_saver = BatchInferenceSaver(
-        model_names=ALL_MODELS,
-        conf=conf,
-        iou=iou
-    )
+    for model_name in ALL_MODELS:
+        print(f"{'=' * 60}")
+        print(f"Model: {model_name.upper()}")
+        print(f"{'=' * 60}")
+        saver = InferenceSaver(model_name, conf=conf, iou=iou)
+        saver.load_model()
+        saver.save_all_inferences()
+
 
     # Save inferences for all models
     batch_saver.save_all_models_inferences()

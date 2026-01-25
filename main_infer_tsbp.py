@@ -460,12 +460,10 @@ def run_tsbp_pipeline(model_name, data_root, results_inf_root,
 
 if __name__ == "__main__":
     # Example usage
-    from constants import results_inf_root, data_root
-
-    model_name = "yolow"
+    from constants import results_inf_root, data_root, MODEL
 
     run_tsbp_pipeline(
-        model_name=model_name,
+        model_name=MODEL,
         data_root=data_root,
         results_inf_root=results_inf_root,
         tp_threshold=0.50, # accepted

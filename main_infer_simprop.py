@@ -554,24 +554,22 @@ def run_similarity_propagation(model_name, data_root, results_inf_root,
 
 
 if __name__ == "__main__":
-    from constants import results_inf_root, data_root
-
-    model_name = "yoloe"
+    from constants import results_inf_root, data_root, MODEL
 
     # Method 1: KNN-based (Recommended - Simple and effective)
-    # results = run_similarity_propagation(
-    #     model_name=model_name,
-    #     data_root=data_root,
-    #     results_inf_root=results_inf_root,
-    #     method='knn',
-    #     top_percentile=90,  # Top 10% as anchors
-    #     k=5,  # Consider 5 nearest neighbors
-    #     distance_factor=1.5  # Accept if distance < 1.5 * median_anchor_distance
-    # )
+    results = run_similarity_propagation(
+        model_name=MODEL,
+        data_root=data_root,
+        results_inf_root=results_inf_root,
+        method='knn',
+        top_percentile=90,  # Top 10% as anchors
+        k=5,  # Consider 5 nearest neighbors
+        distance_factor=1.5  # Accept if distance < 1.5 * median_anchor_distance
+    )
 
     # Method 2: Density-based (More conservative)
     results = run_similarity_propagation(
-        model_name=model_name,
+        model_name=MODEL,
         data_root=data_root,
         results_inf_root=results_inf_root,
         method='density',
@@ -581,7 +579,7 @@ if __name__ == "__main__":
 
     # Method 3: Voting-based (Most sophisticated)
     results = run_similarity_propagation(
-        model_name=model_name,
+        model_name=MODEL,
         data_root=data_root,
         results_inf_root=results_inf_root,
         method='voting',

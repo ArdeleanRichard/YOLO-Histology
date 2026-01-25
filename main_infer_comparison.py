@@ -13,7 +13,7 @@ class DetectionEvaluator:
     def __init__(self, iou_threshold=0.5):
         self.iou_threshold = iou_threshold
 
-    def load_labels(self, label_dir, img_width=None, img_height=None):
+    def load_labels_ground_truth(self, label_dir, img_width=None, img_height=None):
         """
         Load ground truth labels.
 
@@ -93,7 +93,7 @@ class DetectionEvaluator:
                         pass
         return None
 
-    def load_predictions(self, pred_dir, img_names=None):
+    def load_labels_predictions(self, pred_dir, img_names=None):
         """
         Load predictions.
 
@@ -316,12 +316,12 @@ class DetectionEvaluator:
 
         return ap
 
-    def evaluate(self, labels, predictions, iou_thresholds=None):
+    def evaluate(self, labels_gt, predictions, iou_thresholds=None):
         """
         Evaluate predictions against labels.
 
         Args:
-            labels: Dict of {img_name: [(class, x, y, w, h), ...]}
+            labels_gt: Dict of {img_name: [(class, x, y, w, h), ...]}
             predictions: Dict of {img_name: [(class, x, y, w, h, score), ...]}
             iou_thresholds: List of IoU thresholds (default: [0.5])
 
@@ -332,7 +332,7 @@ class DetectionEvaluator:
             iou_thresholds = [0.5]
 
         # Ensure all images are accounted for
-        all_img_names = set(labels.keys()) | set(predictions.keys())
+        all_img_names = set(labels_gt.keys()) | set(predictions.keys())
 
         results = {}
 
@@ -342,7 +342,7 @@ class DetectionEvaluator:
             total_gt = 0
 
             for img_name in all_img_names:
-                img_labels = labels.get(img_name, [])
+                img_labels = labels_gt.get(img_name, [])
                 img_preds = predictions.get(img_name, [])
 
                 total_gt += len(img_labels)
@@ -473,7 +473,7 @@ def compare_methods(label_dir, pred_dirs, method_names, output_dir=None):
 
     # Load ground truth
     print("Loading ground truth labels...")
-    labels = evaluator.load_labels(label_dir)
+    labels = evaluator.load_labels_ground_truth(label_dir)
     total_gt = sum(len(v) for v in labels.values())
     print(f"Loaded {len(labels)} images with {total_gt} ground truth boxes")
 
@@ -485,7 +485,7 @@ def compare_methods(label_dir, pred_dirs, method_names, output_dir=None):
         # print(f"\t Prediction dir: {pred_dir}")
 
         # Load predictions
-        predictions = evaluator.load_predictions(pred_dir)
+        predictions = evaluator.load_labels_predictions(pred_dir)
         total_pred = sum(len(v) for v in predictions.values())
         print(f"Loaded {total_pred} predictions")
 
@@ -643,7 +643,7 @@ def run_full_comparison(data_root, results_inf_root, model_name, thresholds=[0.3
 
     # 1. Hard thresholds
     evaluator = DetectionEvaluator()
-    base_predictions = evaluator.load_predictions(base_pred_dir)
+    base_predictions = evaluator.load_labels_predictions(base_pred_dir)
 
     for thresh in thresholds:
         # Create temporary directory with thresholded predictions
@@ -652,6 +652,9 @@ def run_full_comparison(data_root, results_inf_root, model_name, thresholds=[0.3
 
         # Apply threshold and save
         filtered_preds = apply_confidence_threshold(base_predictions, thresh)
+
+        if len(filtered_preds.items()) == 0:
+            continue
 
         for img_name, preds in filtered_preds.items():
             out_path = os.path.join(thresh_dir, f"{img_name}.txt")
@@ -698,15 +701,13 @@ if __name__ == "__main__":
             {model_name} / comparison /             # Output comparison results
     """
 
-    from constants import results_inf_root, data_root
-
-    model_name = "yoloe"
+    from constants import results_inf_root, data_root, MODEL
 
     df, detailed = run_full_comparison(
         data_root=data_root,
         results_inf_root=results_inf_root,
-        model_name=model_name,
-        thresholds=[0.3, 0.4, 0.5, 0.6, 0.7]  # Test multiple thresholds
+        model_name=MODEL,
+        thresholds=[0.2, 0.25, 0.3, 0.4, 0.5, 0.6]  # Test multiple thresholds
     )
 
-    print(f"Results saved to: {results_inf_root}/{model_name}/comparison/")
+    print(f"Results saved to: {results_inf_root}/{MODEL}/comparison/")
