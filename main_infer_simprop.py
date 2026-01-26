@@ -5,19 +5,22 @@ import torch.nn as nn
 import torchvision.models as models
 import torchvision.transforms as transforms
 from PIL import Image
-from sklearn.neighbors import NearestNeighbors
+from sklearn.cluster import KMeans
+from sklearn.metrics import pairwise_distances
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from collections import Counter
 
 
-class SimProp:
+class ClusterRefinement:
     """
-    Threshold-free detection refinement using similarity propagation.
+    Cluster-based detection refinement using feature clustering.
 
     Core idea:
-    1. High-confidence detections are assumed correct (anchors)
-    2. Low-confidence detections similar to anchors are kept
-    3. Low-confidence detections dissimilar to all anchors are removed
+    1. Select high-confidence anchors (top percentile per class)
+    2. Extract features using EfficientNet
+    3. Per-class clustering: Remove outliers based on intra-cluster distance
+    4. Cross-class clustering: Remove minority classes from impure clusters
     """
 
     def __init__(self, device=None):
@@ -25,33 +28,28 @@ class SimProp:
         self._init_feature_extractor()
 
     def _init_feature_extractor(self):
-        """Initialize ResNet50 feature extractor"""
-        resnet_50 = models.resnet50(pretrained=True)
-        modules = list(resnet_50.children())[:-1]
-        self.resnet = nn.Sequential(*modules)
-        self.resnet.to(self.device)
-        self.resnet.eval()
+        """Initialize EfficientNet-B3 feature extractor (better than ResNet50)"""
+        efficientnet = models.efficientnet_b3(pretrained=True)
+        # Remove classification head, keep feature extractor
+        self.feature_extractor = nn.Sequential(*list(efficientnet.children())[:-1])
+        self.feature_extractor.to(self.device)
+        self.feature_extractor.eval()
 
         self.transform = transforms.Compose([
-            transforms.Resize((224, 224)),
+            transforms.Resize((300, 300)),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225])
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
 
     def extract_features(self, image_pil):
-        """Extract deep features from image crop using ResNet50"""
+        """Extract deep features from image crop using EfficientNet-B3"""
         image_tensor = self.transform(image_pil).unsqueeze(0).to(self.device)
         with torch.no_grad():
-            features = self.resnet(image_tensor).squeeze().cpu()
+            features = self.feature_extractor(image_tensor).squeeze().cpu()
         return features
 
     def load_all_detections(self, txt_path, img_path):
-        """
-        Load ALL detections from file (no threshold filtering).
-
-        Format per line: class_id, x, y, w, h, score
-        """
+        """Load ALL detections from file (no threshold filtering)."""
         if not os.path.exists(txt_path):
             return []
 
@@ -70,15 +68,12 @@ class SimProp:
 
                 class_id, x, y, w, h, score = [float(p.strip()) for p in parts]
 
-                # Convert to integer bbox coordinates
                 x1, y1 = int(x), int(y)
                 x2, y2 = int(x + w), int(y + h)
 
-                # Skip invalid boxes
                 if x2 <= x1 + 2 or y2 <= y1 + 2:
                     continue
 
-                # Crop and extract features
                 crop = img.crop((x1, y1, x2, y2))
                 features = self.extract_features(crop)
 
@@ -87,284 +82,227 @@ class SimProp:
                     'bbox_orig': (x, y, w, h),
                     'score': score,
                     'class': int(class_id),
-                    'feature': features.numpy()  # Store as numpy for sklearn
+                    'feature': features.numpy()
                 }
                 detections.append(detection)
 
         return detections
 
-    def analyze_confidence_distribution(self, all_detections):
-        """Analyze the distribution of confidence scores"""
-        scores = [d['score'] for d in all_detections]
-
-        print("\n=== Confidence Score Distribution ===")
-        print(f"Total detections: {len(scores)}")
-        print(f"Min score: {min(scores):.4f}")
-        print(f"Max score: {max(scores):.4f}")
-        print(f"Mean score: {np.mean(scores):.4f}")
-        print(f"Median score: {np.median(scores):.4f}")
-
-        # Percentiles
-        percentiles = [50, 60, 70, 80, 90, 95, 99]
-        print("\nPercentiles:")
-        for p in percentiles:
-            val = np.percentile(scores, p)
-            count = sum(s >= val for s in scores)
-            print(f"  {p}th percentile: {val:.4f} ({count} detections above)")
-
-        return scores
-
-    def automatic_anchor_selection(self, all_detections, top_percentile=90):
+    def get_class_anchors(self, detections, top_percentile=90):
         """
-        Automatically select high-confidence anchors.
+        Extract anchors (high-confidence boxes) per class.
 
         Args:
-            all_detections: List of all detections
-            top_percentile: Percentile for anchor selection (default: top 10%)
+            detections: List of all detections
+            top_percentile: Percentile for anchor selection
 
         Returns:
-            anchors: High-confidence detections
-            candidates: Low-confidence detections to evaluate
+            tuple: (class_detections, class_anchors)
+                - class_detections: dict {class_id: [all_detections]}
+                - class_anchors: dict {class_id: [anchor_detections]}
         """
-        scores = np.array([d['score'] for d in all_detections])
-        threshold = np.percentile(scores, top_percentile)
+        # Group by class
+        class_detections = {}
+        for det in detections:
+            cls = det['class']
+            if cls not in class_detections:
+                class_detections[cls] = []
+            class_detections[cls].append(det)
 
-        anchors = [d for d in all_detections if d['score'] >= threshold]
-        candidates = [d for d in all_detections if d['score'] < threshold]
+        # Select anchors per class
+        class_anchors = {}
+        for cls, dets in class_detections.items():
+            scores = np.array([d['score'] for d in dets])
+            threshold = np.percentile(scores, top_percentile)
+            anchors = [d for d in dets if d['score'] >= threshold]
+            class_anchors[cls] = anchors
 
-        print(f"\n=== Anchor Selection (top {100 - top_percentile}%) ===")
-        print(f"Anchor threshold: {threshold:.4f}")
-        print(f"Anchors: {len(anchors)}")
-        print(f"Candidates: {len(candidates)}")
+        print(f"\n=== Anchor Selection (top {100 - top_percentile}% per class) ===")
+        for cls, anchors in class_anchors.items():
+            print(f"Class {cls}: {len(anchors)} anchors from {len(class_detections[cls])} detections")
 
-        return anchors, candidates, threshold
+        return class_detections, class_anchors
 
-    def compute_similarity_statistics(self, anchors):
+    def per_class_clustering(self, class_detections, class_anchors, k=10):
         """
-        Compute inter-anchor similarity statistics to understand
-        what "similar" means for this dataset.
-        """
-        if len(anchors) < 2:
-            return None
+        Run K-Means clustering per class on ALL detections and remove outliers.
+        Remove entire clusters that contain no anchors.
 
-        features = np.stack([a['feature'] for a in anchors])
-
-        # Compute pairwise distances
-        from scipy.spatial.distance import pdist, squareform
-        distances = squareform(pdist(features, metric='euclidean'))
-
-        # Get nearest neighbor distances (exclude self)
-        np.fill_diagonal(distances, np.inf)
-        nn_distances = np.min(distances, axis=1)
-
-        stats = {
-            'mean': np.mean(nn_distances),
-            'median': np.median(nn_distances),
-            'std': np.std(nn_distances),
-            'q25': np.percentile(nn_distances, 25),
-            'q75': np.percentile(nn_distances, 75),
-            'q95': np.percentile(nn_distances, 95)
-        }
-
-        print("\n=== Anchor Similarity Statistics ===")
-        print(f"Mean NN distance: {stats['mean']:.2f}")
-        print(f"Median NN distance: {stats['median']:.2f}")
-        print(f"Std NN distance: {stats['std']:.2f}")
-        print(f"25th percentile: {stats['q25']:.2f}")
-        print(f"75th percentile: {stats['q75']:.2f}")
-        print(f"95th percentile: {stats['q95']:.2f}")
-
-        return stats
-
-    def propagate_by_knn(self, anchors, candidates, k=5, distance_factor=1.5):
-        """
-        Propagate labels using K-Nearest Neighbors approach.
+        For remaining clusters, remove boxes whose minimum distance to other boxes
+        in the cluster is larger than the mean distance.
 
         Args:
-            anchors: High-confidence detections
-            candidates: Low-confidence detections to evaluate
-            k: Number of nearest neighbors to consider
-            distance_factor: Multiplier for adaptive threshold
-                           (distance < factor * median_anchor_distance)
+            class_detections: dict {class_id: [all_detections]}
+            class_anchors: dict {class_id: [anchor_detections]}
+            k: Number of clusters
 
         Returns:
-            accepted: Candidates that are similar to anchors
-            rejected: Candidates that are dissimilar
+            dict: {class_id: [refined_detections]}
         """
-        if len(anchors) == 0:
-            return [], candidates
+        refined_detections = {}
 
-        # Compute anchor similarity statistics
-        stats = self.compute_similarity_statistics(anchors)
+        print(f"\n=== Per-Class Clustering (k={k}) ===")
 
-        # Adaptive distance threshold based on anchor distribution
-        if stats:
-            distance_threshold = stats['median'] * distance_factor
-        else:
-            distance_threshold = float('inf')
+        for cls, detections in class_detections.items():
+            anchors = class_anchors[cls]
+            anchor_ids = set(id(a) for a in anchors)
 
-        print(f"\n=== KNN Propagation (k={k}) ===")
-        print(f"Distance threshold: {distance_threshold:.2f}")
+            if len(detections) < k:
+                print(f"Class {cls}: Too few detections ({len(detections)}), keeping all")
+                refined_detections[cls] = detections
+                continue
 
-        # Build KNN index on anchors
-        anchor_features = np.stack([a['feature'] for a in anchors])
-        nbrs = NearestNeighbors(n_neighbors=min(k, len(anchors)),
-                                metric='euclidean').fit(anchor_features)
+            # Extract features from ALL detections
+            features = np.stack([d['feature'] for d in detections])
 
-        accepted = []
-        rejected = []
+            # K-Means clustering
+            kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+            labels = kmeans.fit_predict(features)
 
-        candidate_features = np.stack([c['feature'] for c in candidates])
+            # Process each cluster
+            kept_indices = []
+            removed_no_anchor = 0
+            removed_outliers = 0
 
-        # Query for each candidate
-        distances, indices = nbrs.kneighbors(candidate_features)
+            for cluster_id in range(k):
+                cluster_mask = labels == cluster_id
+                cluster_indices = np.where(cluster_mask)[0]
 
-        for i, candidate in enumerate(candidates):
-            # Mean distance to k nearest anchors
-            mean_dist = np.mean(distances[i])
-            min_dist = np.min(distances[i])
+                # Check if cluster contains any anchors
+                cluster_has_anchor = any(id(detections[i]) in anchor_ids for i in cluster_indices)
 
-            candidate['nearest_anchor_dist'] = min_dist
-            candidate['mean_knn_dist'] = mean_dist
+                if not cluster_has_anchor:
+                    # Remove entire cluster (no anchors)
+                    removed_no_anchor += len(cluster_indices)
+                    continue
 
-            # Decision: accept if similar enough to anchors
-            if min_dist < distance_threshold:
-                accepted.append(candidate)
-            else:
-                rejected.append(candidate)
+                if len(cluster_indices) <= 1:
+                    kept_indices.extend(cluster_indices.tolist())
+                    continue
 
-        print(f"Accepted: {len(accepted)}")
-        print(f"Rejected: {len(rejected)}")
+                # Get features for this cluster
+                cluster_features = features[cluster_indices]
 
-        return accepted, rejected
+                # Compute pairwise distances within cluster
+                distances = pairwise_distances(cluster_features, metric='euclidean')
 
-    def propagate_by_density(self, anchors, candidates, sigma=1.0):
+                # For each box, find minimum distance to another box in cluster
+                np.fill_diagonal(distances, np.inf)
+                min_distances = np.min(distances, axis=1)
+
+                # Compute mean minimum distance
+                mean_min_dist = np.mean(min_distances)
+
+                # anchors_in_cluster_mask = [id(detections[i]) in anchor_ids for i in cluster_indices]
+                # anchor_positions = np.where(np.array(anchors_in_cluster_mask))[0]
+                #
+                # anchor_features = cluster_features[anchor_positions]
+                #
+                # dist_to_anchors = pairwise_distances(cluster_features, anchor_features, metric='euclidean')
+                # min_dist_to_anchor = np.min(dist_to_anchors, axis=1)
+
+                # Keep boxes with min_distance <= mean
+                for i, idx in enumerate(cluster_indices):
+                    if min_distances[i] <= mean_min_dist: # and min_dist_to_anchor[i] <= mean_min_dist :
+                        kept_indices.append(idx)
+                    else:
+                        removed_outliers += 1
+
+            refined_detections[cls] = [detections[i] for i in kept_indices]
+
+            print(f"Class {cls}: {len(detections)} -> {len(refined_detections[cls])} "
+                  f"(removed {removed_no_anchor} from clusters without anchors, "
+                  f"{removed_outliers} outliers)")
+
+        return refined_detections
+
+    def cross_class_clustering(self, class_detections, k=10):
         """
-        Propagate based on density estimation in feature space.
-
-        Candidates in high-density regions (near many anchors) are accepted.
+        Run K-Means across all classes on ALL detections to find impure clusters.
+        Remove minority classes from impure clusters.
 
         Args:
-            anchors: High-confidence detections
-            candidates: Low-confidence detections
-            sigma: Bandwidth for density estimation
+            class_detections: dict {class_id: [all_detections]}
+            k: Number of clusters
 
         Returns:
-            accepted: Candidates in dense regions
-            rejected: Candidates in sparse regions
+            dict: {class_id: [refined_detections]}
         """
-        if len(anchors) == 0:
-            return [], candidates
+        # Flatten all detections
+        all_detections = []
+        for cls, detections in class_detections.items():
+            all_detections.extend(detections)
 
-        anchor_features = np.stack([a['feature'] for a in anchors])
+        if len(all_detections) < k:
+            print(f"\n=== Cross-Class Clustering: Skipped (too few detections) ===")
+            return class_detections
 
-        print(f"\n=== Density-Based Propagation (sigma={sigma}) ===")
+        print(f"\n=== Cross-Class Clustering (k={k}) ===")
 
-        # Compute density for each candidate
-        accepted = []
-        rejected = []
-        densities = []
+        # Extract features and class labels
+        features = np.stack([d['feature'] for d in all_detections])
+        classes = np.array([d['class'] for d in all_detections])
 
-        for candidate in candidates:
-            cand_feat = candidate['feature'].reshape(1, -1)
+        # K-Means clustering
+        kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+        labels = kmeans.fit_predict(features)
 
-            # Compute density as sum of Gaussian kernels
-            distances = np.linalg.norm(anchor_features - cand_feat, axis=1)
-            density = np.sum(np.exp(-distances ** 2 / (2 * sigma ** 2)))
+        # Identify impure clusters and remove minority classes
+        indices_to_keep = set(range(len(all_detections)))
 
-            candidate['density'] = density
-            densities.append(density)
+        for cluster_id in range(k):
+            cluster_mask = labels == cluster_id
+            cluster_indices = np.where(cluster_mask)[0]
+            cluster_classes = classes[cluster_mask]
 
-        # Adaptive threshold: median density
-        density_threshold = np.median(densities)
+            # Count classes in cluster
+            class_counts = Counter(cluster_classes)
 
-        print(f"Density threshold (median): {density_threshold:.4f}")
+            if len(class_counts) > 1:
+                # Impure cluster - keep only majority class
+                majority_class = class_counts.most_common(1)[0][0]
+                minority_count = 0
 
-        for candidate in candidates:
-            if candidate['density'] >= density_threshold:
-                accepted.append(candidate)
-            else:
-                rejected.append(candidate)
+                for i in cluster_indices:
+                    if classes[i] != majority_class:
+                        indices_to_keep.discard(i)
+                        minority_count += 1
 
-        print(f"Accepted: {len(accepted)}")
-        print(f"Rejected: {len(rejected)}")
+                print(f"Cluster {cluster_id}: Impure - kept class {majority_class}, "
+                      f"removed {minority_count} minority boxes")
 
-        return accepted, rejected
+        # Reconstruct class_detections with kept indices
+        kept_detections = [all_detections[i] for i in sorted(indices_to_keep)]
 
-    def propagate_by_voting(self, anchors, candidates, k=10, vote_threshold=0.5):
+        refined_detections = {}
+        for detection in kept_detections:
+            cls = detection['class']
+            if cls not in refined_detections:
+                refined_detections[cls] = []
+            refined_detections[cls].append(detection)
+
+        total_removed = len(all_detections) - len(kept_detections)
+        print(f"Total: {len(all_detections)} -> {len(kept_detections)} (removed {total_removed})")
+
+        return refined_detections
+
+    def run(self, image_dir, infer_dir, out_dir, top_percentile=90, k_per_class=10, k_cross_class=10):
         """
-        Propagate using majority voting from k nearest anchors.
-
-        Args:
-            anchors: High-confidence detections
-            candidates: Low-confidence detections
-            k: Number of nearest neighbors to vote
-            vote_threshold: Fraction of votes needed to accept
-
-        Returns:
-            accepted: Candidates with enough votes
-            rejected: Candidates without enough votes
-        """
-        if len(anchors) == 0:
-            return [], candidates
-
-        print(f"\n=== Voting-Based Propagation (k={k}, threshold={vote_threshold}) ===")
-
-        # Compute anchor similarity stats
-        stats = self.compute_similarity_statistics(anchors)
-
-        anchor_features = np.stack([a['feature'] for a in anchors])
-        nbrs = NearestNeighbors(n_neighbors=min(k, len(anchors)),
-                                metric='euclidean').fit(anchor_features)
-
-        accepted = []
-        rejected = []
-
-        candidate_features = np.stack([c['feature'] for c in candidates])
-        distances, indices = nbrs.kneighbors(candidate_features)
-
-        # Use anchor distribution to determine voting weights
-        distance_scale = stats['median'] if stats else 1.0
-
-        for i, candidate in enumerate(candidates):
-            # Weight votes by inverse distance
-            weights = np.exp(-distances[i] / distance_scale)
-            normalized_weights = weights / np.sum(weights)
-
-            # Vote score is weighted sum
-            vote_score = np.sum(normalized_weights)
-
-            candidate['vote_score'] = vote_score
-
-            if vote_score >= vote_threshold:
-                accepted.append(candidate)
-            else:
-                rejected.append(candidate)
-
-        print(f"Accepted: {len(accepted)}")
-        print(f"Rejected: {len(rejected)}")
-
-        return accepted, rejected
-
-    def run(self, image_dir, infer_dir, out_dir,
-            method='knn', top_percentile=90, **method_kwargs):
-        """
-        Run similarity-based propagation.
+        Run cluster-based refinement.
 
         Args:
             image_dir: Directory with images
             infer_dir: Directory with detection .txt files
             out_dir: Output directory
-            method: 'knn', 'density', or 'voting'
-            top_percentile: Percentile for anchor selection
-            **method_kwargs: Additional arguments for propagation method
+            top_percentile: Percentile for anchor selection per class
+            k_per_class: Number of clusters for per-class clustering
+            k_cross_class: Number of clusters for cross-class clustering
         """
         os.makedirs(out_dir, exist_ok=True)
 
         print("=" * 70)
-        print("SIMILARITY-BASED DETECTION PROPAGATION")
+        print("CLUSTER-BASED DETECTION REFINEMENT")
         print("=" * 70)
-        print(f"Method: {method}")
         print(f"Image dir: {image_dir}")
         print(f"Inference dir: {infer_dir}")
         print(f"Output dir: {out_dir}")
@@ -410,50 +348,46 @@ class SimProp:
             print("No detections found!")
             return
 
-        # Analyze distribution
-        self.analyze_confidence_distribution(all_detections)
+        # Count classes
+        unique_classes = set(d['class'] for d in all_detections)
+        print(f"\n=== Dataset Statistics ===")
+        print(f"Total detections: {len(all_detections)}")
+        print(f"Number of classes: {len(unique_classes)}")
+        print(f"Classes: {sorted(unique_classes)}")
 
-        # Automatic anchor selection
-        anchors, candidates, _ = self.automatic_anchor_selection(
-            all_detections, top_percentile
-        )
+        # Step 1: Get both all class detections and anchors per class
+        class_detections, class_anchors = self.get_class_anchors(all_detections, top_percentile)
 
-        # Propagate labels based on similarity
-        if method == 'knn':
-            accepted, rejected = self.propagate_by_knn(
-                anchors, candidates, **method_kwargs
-            )
-        elif method == 'density':
-            accepted, rejected = self.propagate_by_density(
-                anchors, candidates, **method_kwargs
-            )
-        elif method == 'voting':
-            accepted, rejected = self.propagate_by_voting(
-                anchors, candidates, **method_kwargs
-            )
+        # Step 2: Per-class clustering on ALL detections (removes clusters without anchors + outliers)
+        refined_detections = self.per_class_clustering(class_detections, class_anchors, k=k_per_class)
+
+        # Step 3: Cross-class clustering on ALL remaining detections (only if multiple classes)
+        if len(unique_classes) > 1:
+            refined_detections = self.cross_class_clustering(refined_detections, k=k_cross_class)
         else:
-            raise ValueError(f"Unknown method: {method}")
+            print("\n=== Cross-Class Clustering: Skipped (single class) ===")
 
-        # Final detections = anchors + accepted candidates
-        final_detections = anchors + accepted
+        # Flatten final detections
+        final_detections = []
+        for cls, detections in refined_detections.items():
+            final_detections.extend(detections)
 
         print(f"\n=== Final Results ===")
         print(f"Original detections: {len(all_detections)}")
         print(f"Final detections: {len(final_detections)}")
         print(f"Kept: {len(final_detections)} ({100 * len(final_detections) / len(all_detections):.1f}%)")
-        print(f"Removed: {len(rejected)} ({100 * len(rejected) / len(all_detections):.1f}%)")
+        print(f"Removed: {len(all_detections) - len(final_detections)} "
+              f"({100 * (len(all_detections) - len(final_detections)) / len(all_detections):.1f}%)")
 
         # Save results
         self._save_results(final_detections, image_names, out_dir)
 
         # Save analysis
-        self._save_analysis(all_detections, anchors, accepted, rejected, out_dir)
+        self._save_analysis(all_detections, class_anchors, final_detections, out_dir)
 
         return {
             'all_detections': all_detections,
-            'anchors': anchors,
-            'accepted': accepted,
-            'rejected': rejected,
+            'class_anchors': class_anchors,
             'final_detections': final_detections
         }
 
@@ -479,35 +413,38 @@ class SimProp:
 
         print(f"\nResults saved to: {out_dir}")
 
-    def _save_analysis(self, all_dets, anchors, accepted, rejected, out_dir):
+    def _save_analysis(self, all_dets, class_anchors, final_dets, out_dir):
         """Save analysis plots and statistics"""
         analysis_dir = os.path.join(out_dir, 'analysis')
         os.makedirs(analysis_dir, exist_ok=True)
 
-        # Score distribution plot
+        # Get all anchors
+        initial_anchors = []
+        for cls, anchors in class_anchors.items():
+            initial_anchors.extend(anchors)
+
         plt.figure(figsize=(12, 5))
 
+        # Score distribution
         plt.subplot(1, 2, 1)
         scores_all = [d['score'] for d in all_dets]
-        scores_anchors = [d['score'] for d in anchors]
-        scores_accepted = [d['score'] for d in accepted]
-        scores_rejected = [d['score'] for d in rejected]
+        scores_anchors = [d['score'] for d in initial_anchors]
+        scores_final = [d['score'] for d in final_dets]
 
         plt.hist(scores_all, bins=50, alpha=0.3, label='All', color='gray')
-        plt.hist(scores_anchors, bins=50, alpha=0.5, label='Anchors', color='green')
-        plt.hist(scores_accepted, bins=50, alpha=0.5, label='Accepted', color='blue')
-        plt.hist(scores_rejected, bins=50, alpha=0.5, label='Rejected', color='red')
+        plt.hist(scores_anchors, bins=50, alpha=0.5, label='Anchors', color='blue')
+        plt.hist(scores_final, bins=50, alpha=0.5, label='Final (Refined)', color='green')
         plt.xlabel('Confidence Score')
         plt.ylabel('Count')
         plt.title('Detection Score Distribution')
         plt.legend()
         plt.grid(alpha=0.3)
 
+        # Count comparison
         plt.subplot(1, 2, 2)
-        categories = ['All', 'Anchors', 'Accepted', 'Rejected', 'Final']
-        counts = [len(all_dets), len(anchors), len(accepted),
-                  len(rejected), len(anchors) + len(accepted)]
-        colors = ['gray', 'green', 'blue', 'red', 'purple']
+        categories = ['All\nDetections', 'Anchors', 'Final\n(Refined)']
+        counts = [len(all_dets), len(initial_anchors), len(final_dets)]
+        colors = ['gray', 'blue', 'green']
         plt.bar(categories, counts, color=colors, alpha=0.7)
         plt.ylabel('Count')
         plt.title('Detection Counts')
@@ -520,34 +457,31 @@ class SimProp:
         print(f"Analysis saved to: {analysis_dir}")
 
 
-def run_similarity_propagation(model_name, data_root, results_inf_root,
-                               method='knn', top_percentile=90, **method_kwargs):
+def run_cluster_refinement(model_name, data_root, results_inf_root,
+                           top_percentile=90, k_per_class=10, k_cross_class=10):
     """
-    Run similarity-based propagation.
+    Run cluster-based detection refinement.
 
     Args:
         model_name: Model name
         data_root: Root data directory
         results_inf_root: Root results directory
-        method: 'knn' (recommended), 'density', or 'voting'
-        top_percentile: Percentile for anchor selection (default: 90 = top 10%)
-        **method_kwargs: Method-specific parameters:
-            - knn: k=5, distance_factor=1.5
-            - density: sigma=1.0
-            - voting: k=10, vote_threshold=0.5
+        top_percentile: Percentile for anchor selection per class (default: 90 = top 10%)
+        k_per_class: Number of clusters for per-class clustering
+        k_cross_class: Number of clusters for cross-class clustering
     """
     image_dir = f"{data_root}/images/test/"
     infer_dir = f"{results_inf_root}/{model_name}/"
-    out_dir = f"{results_inf_root}/{model_name}/simprop_{method}/"
+    out_dir = f"{results_inf_root}/{model_name}/cluster_refined2/"
 
-    detector = SimProp()
-    results = detector.run(
+    refiner = ClusterRefinement()
+    results = refiner.run(
         image_dir=image_dir,
         infer_dir=infer_dir,
         out_dir=out_dir,
-        method=method,
         top_percentile=top_percentile,
-        **method_kwargs
+        k_per_class=k_per_class,
+        k_cross_class=k_cross_class
     )
 
     return results
@@ -556,34 +490,11 @@ def run_similarity_propagation(model_name, data_root, results_inf_root,
 if __name__ == "__main__":
     from constants import results_inf_root, data_root, MODEL
 
-    # Method 1: KNN-based (Recommended - Simple and effective)
-    results = run_similarity_propagation(
+    results = run_cluster_refinement(
         model_name=MODEL,
         data_root=data_root,
         results_inf_root=results_inf_root,
-        method='knn',
-        top_percentile=90,  # Top 10% as anchors
-        k=5,  # Consider 5 nearest neighbors
-        distance_factor=1.5  # Accept if distance < 1.5 * median_anchor_distance
-    )
-
-    # Method 2: Density-based (More conservative)
-    results = run_similarity_propagation(
-        model_name=MODEL,
-        data_root=data_root,
-        results_inf_root=results_inf_root,
-        method='density',
-        top_percentile=90,
-        sigma=1.0
-    )
-
-    # Method 3: Voting-based (Most sophisticated)
-    results = run_similarity_propagation(
-        model_name=MODEL,
-        data_root=data_root,
-        results_inf_root=results_inf_root,
-        method='voting',
-        top_percentile=90,
-        k=10,
-        vote_threshold=0.5
+        top_percentile=90,  # Top 10% as anchors per class
+        k_per_class=10,  # 10 clusters per class
+        k_cross_class=10  # 10 clusters across all classes
     )

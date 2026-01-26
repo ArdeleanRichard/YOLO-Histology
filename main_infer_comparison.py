@@ -672,14 +672,25 @@ def run_full_comparison(data_root, results_inf_root, model_name, thresholds=[0.3
         pred_dirs.append(tsbp_dir)
         method_names.append("TSBP")
 
-    # 3. Similarity Propagation (if exists)
+    # # 3. Similarity Propagation (if exists)
+    # simprop = "simprop"
+    # for simprop_type in ["_knn", "_density", "_voting"]:
+    #     sim_dir = f"{results_inf_root}/{model_name}/{simprop}{simprop_type}/"
+    #     if os.path.exists(sim_dir) and os.listdir(sim_dir):
+    #         pred_dirs.append(sim_dir)
+    #         method_names.append(f"{simprop}{simprop_type}")
 
-    simprop = "simprop"
-    for simprop_type in ["_knn", "_density", "_voting"]:
-        sim_dir = f"{results_inf_root}/{model_name}/{simprop}{simprop_type}/"
-        if os.path.exists(sim_dir) and os.listdir(sim_dir):
-            pred_dirs.append(sim_dir)
-            method_names.append(f"{simprop}{simprop_type}")
+    # 4
+    clust_dir = f"{results_inf_root}/{model_name}/cluster_refined/"
+    if os.path.exists(clust_dir) and os.listdir(clust_dir):
+        pred_dirs.append(clust_dir)
+        method_names.append("Clust")
+
+    clust_dir = f"{results_inf_root}/{model_name}/cluster_refined2/"
+    if os.path.exists(clust_dir) and os.listdir(clust_dir):
+        pred_dirs.append(clust_dir)
+        method_names.append("Clust2")
+
 
     # Run comparison
     df, detailed = compare_methods(label_dir, pred_dirs, method_names, output_dir)

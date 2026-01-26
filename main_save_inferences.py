@@ -15,7 +15,3 @@ if __name__ == "__main__":
         saver = InferenceSaver(model_name, conf=conf, iou=iou)
         saver.load_model()
         saver.save_all_inferences()
-
-
-    # Save inferences for all models
-    batch_saver.save_all_models_inferences()

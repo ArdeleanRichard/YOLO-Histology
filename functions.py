@@ -119,7 +119,8 @@ class ModelEvaluator(ModelLoader):
         # Run YOLO validation on the dataset
         val_results = self.model.val(data=dataset_yaml_path if self.model_name != "yoloe" else dataset_SEG_yaml_path,
                                      project=f"{results_root}/runs_test/{self.model_name}/",
-                                     conf=self.conf, iou=self.iou, split='test')
+                                     conf=self.conf, iou=self.iou, split='test',
+                                     save_json=True)
 
         self.metrics = {
             "Box mAP@50":           val_results.box.map50,
@@ -242,8 +243,7 @@ class PlotHelper:
             color = color_map[(cls + 1) % len(color_map)]
             # print(cls, cls+1, len(color_map), color)
             cv2.rectangle(img, (x1, y1), (x2, y2), color, thickness=3)
-            # cv2.putText(img, class_names[cls], (x1, max(20, y1 - 10)),
-            #             cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, thickness=2)
+            # cv2.putText(img, class_names[cls], (x1, max(20, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, thickness=2)
         return img
 
 
@@ -489,6 +489,8 @@ class ResultPlotter(PlotHelper, ModelLoader):
         """
         self.prepare_single_image_all_models(image_index)
         self.plot_all_models_single_image()
+
+
 
 
 class InferenceSaver(ModelLoader):
