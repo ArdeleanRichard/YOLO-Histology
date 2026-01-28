@@ -234,8 +234,7 @@ class TSBPDetector:
 
             image_detections[img_name] = []
 
-        print(f"Initial counts - TP: {len(all_tp_orig)}, FP: {len(all_fp_orig)}, "
-              f"Candidates: {len(all_candidates)}")
+        print(f"Initial counts - TP: {len(all_tp_orig)}, FP: {len(all_fp_orig)}, Candidates: {len(all_candidates)}")
 
         if len(all_tp_orig) == 0 or len(all_candidates) == 0:
             print("Insufficient detections for TSBP. Outputting original high-confidence detections.")

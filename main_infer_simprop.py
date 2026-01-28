@@ -11,6 +11,14 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from collections import Counter
 
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+from sklearn.metrics import pairwise_distances
+
+
+
 
 class ClusterRefinement:
     """
@@ -48,7 +56,7 @@ class ClusterRefinement:
             features = self.feature_extractor(image_tensor).squeeze().cpu()
         return features
 
-    def load_all_detections(self, txt_path, img_path):
+    def load_all_detections(self, txt_path, img_path, out_dir):
         """Load ALL detections from file (no threshold filtering)."""
         if not os.path.exists(txt_path):
             return []
@@ -56,8 +64,18 @@ class ClusterRefinement:
         img = Image.open(img_path).convert('RGB')
         detections = []
 
+        features_dir = os.path.join(out_dir, "features")
+        os.makedirs(features_dir, exist_ok=True)
+
+        loaded = False
+        npy_path = os.path.join(features_dir, os.path.basename(txt_path).replace(".txt", f".npy"))
+        image_features = []
+        if os.path.isfile(npy_path):
+            image_features = np.load(npy_path, allow_pickle=True)
+            loaded = True
+
         with open(txt_path, 'r') as f:
-            for line in f:
+            for id, line in enumerate(f):
                 line = line.strip()
                 if not line:
                     continue
@@ -75,16 +93,25 @@ class ClusterRefinement:
                     continue
 
                 crop = img.crop((x1, y1, x2, y2))
-                features = self.extract_features(crop)
+
+                if loaded == True:
+                    features = image_features[id]
+                else:
+                    features = self.extract_features(crop).numpy()
+                    image_features.append(features)
 
                 detection = {
                     'bbox': (x1, y1, x2, y2),
                     'bbox_orig': (x, y, w, h),
                     'score': score,
                     'class': int(class_id),
-                    'feature': features.numpy()
+                    'feature': features
                 }
                 detections.append(detection)
+
+            if loaded != True:
+                 np.save(npy_path, np.array(image_features), allow_pickle=True)
+
 
         return detections
 
@@ -156,7 +183,7 @@ class ClusterRefinement:
             features = np.stack([d['feature'] for d in detections])
 
             # K-Means clustering
-            kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+            kmeans = KMeans(n_clusters=k, random_state=42)
             labels = kmeans.fit_predict(features)
 
             # Process each cluster
@@ -335,7 +362,7 @@ class ClusterRefinement:
             if img_path is None:
                 continue
 
-            detections = self.load_all_detections(txt_path, img_path)
+            detections = self.load_all_detections(txt_path, img_path, out_dir)
 
             for det in detections:
                 det['img_name'] = img_name
@@ -383,11 +410,10 @@ class ClusterRefinement:
         self._save_results(final_detections, image_names, out_dir)
 
         # Save analysis
-        self._save_analysis(all_detections, class_anchors, final_detections, out_dir)
+        self._save_analysis(all_detections, final_detections, out_dir)
 
         return {
             'all_detections': all_detections,
-            'class_anchors': class_anchors,
             'final_detections': final_detections
         }
 
@@ -413,26 +439,19 @@ class ClusterRefinement:
 
         print(f"\nResults saved to: {out_dir}")
 
-    def _save_analysis(self, all_dets, class_anchors, final_dets, out_dir):
+    def _save_analysis(self, all_dets, final_dets, out_dir):
         """Save analysis plots and statistics"""
         analysis_dir = os.path.join(out_dir, 'analysis')
         os.makedirs(analysis_dir, exist_ok=True)
-
-        # Get all anchors
-        initial_anchors = []
-        for cls, anchors in class_anchors.items():
-            initial_anchors.extend(anchors)
 
         plt.figure(figsize=(12, 5))
 
         # Score distribution
         plt.subplot(1, 2, 1)
         scores_all = [d['score'] for d in all_dets]
-        scores_anchors = [d['score'] for d in initial_anchors]
         scores_final = [d['score'] for d in final_dets]
 
         plt.hist(scores_all, bins=50, alpha=0.3, label='All', color='gray')
-        plt.hist(scores_anchors, bins=50, alpha=0.5, label='Anchors', color='blue')
         plt.hist(scores_final, bins=50, alpha=0.5, label='Final (Refined)', color='green')
         plt.xlabel('Confidence Score')
         plt.ylabel('Count')
@@ -442,9 +461,9 @@ class ClusterRefinement:
 
         # Count comparison
         plt.subplot(1, 2, 2)
-        categories = ['All\nDetections', 'Anchors', 'Final\n(Refined)']
-        counts = [len(all_dets), len(initial_anchors), len(final_dets)]
-        colors = ['gray', 'blue', 'green']
+        categories = ['All\nDetections', 'Final\n(Refined)']
+        counts = [len(all_dets), len(final_dets)]
+        colors = ['gray', 'green']
         plt.bar(categories, counts, color=colors, alpha=0.7)
         plt.ylabel('Count')
         plt.title('Detection Counts')
@@ -457,8 +476,7 @@ class ClusterRefinement:
         print(f"Analysis saved to: {analysis_dir}")
 
 
-def run_cluster_refinement(model_name, data_root, results_inf_root,
-                           top_percentile=90, k_per_class=10, k_cross_class=10):
+def run_cluster_refinement(model_name, data_root, results_inf_root, top_percentile=90, k_per_class=10, k_cross_class=10):
     """
     Run cluster-based detection refinement.
 
@@ -473,6 +491,8 @@ def run_cluster_refinement(model_name, data_root, results_inf_root,
     image_dir = f"{data_root}/images/test/"
     infer_dir = f"{results_inf_root}/{model_name}/"
     out_dir = f"{results_inf_root}/{model_name}/cluster_refined2/"
+    analysis_dir = os.path.join(out_dir, 'analysis')
+    os.makedirs(analysis_dir, exist_ok=True)
 
     refiner = ClusterRefinement()
     results = refiner.run(

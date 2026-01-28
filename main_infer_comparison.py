@@ -2,6 +2,8 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import umap
+from sklearn.decomposition import PCA
 
 
 class DetectionEvaluator:
@@ -195,7 +197,7 @@ class DetectionEvaluator:
 
         return intersection / union if union > 0 else 0.0
 
-    def match_predictions_to_labels(self, predictions, labels, iou_threshold):
+    def match_predictions_to_labels(self, image_name, predictions, labels, iou_threshold):
         """
         Match predictions to ground truth labels using IoU threshold.
 
@@ -208,12 +210,18 @@ class DetectionEvaluator:
         fp = []
 
         # Sort predictions by score (descending)
-        preds_sorted = sorted(predictions, key=lambda x: x[5], reverse=True)
+        predictions = np.array(predictions)
+        preds_argsorted = predictions[:, 5].argsort()[::-1]
+
+        preds_sorted = predictions[preds_argsorted]
 
         # Track which labels have been matched
         matched_labels = set()
 
-        for pred in preds_sorted:
+        if DEBUG:
+            labs = []
+            alps = []
+        for id, pred in enumerate(preds_sorted):
             pred_class, pred_x, pred_y, pred_w, pred_h, pred_score = pred
 
             best_iou = 0.0
@@ -240,8 +248,41 @@ class DetectionEvaluator:
             if best_iou >= iou_threshold:
                 tp.append((pred_score, best_iou))
                 matched_labels.add(best_label_idx)
+                if DEBUG:
+                    labs.append(1)
+                    alps.append(pred_score)
             else:
                 fp.append((pred_score,))
+                if DEBUG:
+                    alps.append(pred_score)
+                    labs.append(0)
+
+        if DEBUG:
+            features = np.load(f"{results_inf_root}/{MODEL}/cluster_refined2/features/{image_name}.npy", allow_pickle=True)
+
+            features = features[preds_argsorted]
+
+            # pca = PCA(n_components=2)
+            # X = pca.fit_transform(features)
+
+            reducer = umap.UMAP(
+                n_neighbors=15,
+                min_dist=0.1,
+                n_components=2,
+                random_state=42
+            )
+
+            X = reducer.fit_transform(features)
+
+            alps = np.array(alps)
+            labs = np.array(labs)
+            color_dict = {0: 'red', 1: "green"}
+            plt.scatter(X[:, 0], X[:, 1], c=[color_dict[x] for x in labs], alpha=((alps / max(alps)) + 3) / 4, edgecolors="k")
+            plt.figure()
+            plt.hist(alps[labs == 0], bins=100, alpha=0.6, label='FP')
+            plt.hist(alps[labs == 1], bins=100, alpha=0.6, label='TP')
+            plt.legend()
+            plt.show()
 
         # False negatives are unmatched labels
         fn_count = len(labels) - len(matched_labels)
@@ -350,9 +391,8 @@ class DetectionEvaluator:
                 if len(img_preds) == 0:
                     continue
 
-                tp, fp, fn = self.match_predictions_to_labels(
-                    img_preds, img_labels, iou_thresh
-                )
+                # print(img_name)
+                tp, fp, fn = self.match_predictions_to_labels(img_name, img_preds, img_labels, iou_thresh)
 
                 tp_all.extend(tp)
                 fp_all.extend(fp)
@@ -372,31 +412,31 @@ class DetectionEvaluator:
                 }
                 continue
 
-            precisions, recalls, scores = self.compute_precision_recall_curve(
-                tp_all, fp_all, total_gt
-            )
+            precisions, recalls, scores = self.compute_precision_recall_curve(tp_all, fp_all, total_gt)
 
             # Compute AP
             ap = self.compute_ap(precisions, recalls)
 
-            # Compute metrics at best F1 threshold
-            f1_scores = 2 * (precisions * recalls) / (precisions + recalls + 1e-10)
-            best_f1_idx = np.argmax(f1_scores)
+            # Compute metrics directly from actual TP/FP/FN counts
+            # This is correct for fixed threshold evaluation
+            tp_count = len(tp_all)
+            fp_count = len(fp_all)
+            fn_count = total_gt - tp_count
 
-            best_precision = precisions[best_f1_idx]
-            best_recall = recalls[best_f1_idx]
-            best_f1 = f1_scores[best_f1_idx]
+            actual_precision = tp_count / (tp_count + fp_count) if (tp_count + fp_count) > 0 else 0.0
+            actual_recall = tp_count / total_gt if total_gt > 0 else 0.0
+            actual_f1 = 2 * (actual_precision * actual_recall) / (actual_precision + actual_recall) if (actual_precision + actual_recall) > 0 else 0.0
 
             results[iou_thresh] = {
                 'ap': ap,
-                'precision': best_precision,
-                'recall': best_recall,
-                'f1': best_f1,
-                'tp': len(tp_all),
-                'fp': len(fp_all),
-                'fn': total_gt - len(tp_all),
+                'precision': actual_precision,
+                'recall': actual_recall,
+                'f1': actual_f1,
+                'tp': tp_count,
+                'fp': fp_count,
+                'fn': fn_count,
                 'total_gt': total_gt,
-                'total_pred': len(tp_all) + len(fp_all),
+                'total_pred': tp_count + fp_count,
                 'precisions': precisions,
                 'recalls': recalls,
                 'scores': scores
@@ -691,7 +731,6 @@ def run_full_comparison(data_root, results_inf_root, model_name, thresholds=[0.3
         pred_dirs.append(clust_dir)
         method_names.append("Clust2")
 
-
     # Run comparison
     df, detailed = compare_methods(label_dir, pred_dirs, method_names, output_dir)
 
@@ -704,7 +743,7 @@ if __name__ == "__main__":
         {data_root} /
             images / test /  # Test images
             labels / test /  # Ground truth (class, x, y, w, h)
-    
+
         {results_inf_root} /
             {model_name} /                          # Base predictions (all boxes, no threshold)
             {model_name} / tsbp /                   # TSBP results
@@ -714,11 +753,12 @@ if __name__ == "__main__":
 
     from constants import results_inf_root, data_root, MODEL
 
+    DEBUG = False
     df, detailed = run_full_comparison(
         data_root=data_root,
         results_inf_root=results_inf_root,
         model_name=MODEL,
-        thresholds=[0.2, 0.25, 0.3, 0.4, 0.5, 0.6]  # Test multiple thresholds
+        thresholds=[0.00, 0.05, 0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6]  # Test multiple thresholds
     )
 
     print(f"Results saved to: {results_inf_root}/{MODEL}/comparison/")
