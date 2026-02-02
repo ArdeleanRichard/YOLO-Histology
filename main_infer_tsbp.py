@@ -412,7 +412,7 @@ class TSBPDetector:
         print(f"Results saved to {out_dir}")
 
 
-def run_tsbp_pipeline(model_name, data_root, results_inf_root,
+def run_tsbp_pipeline(model_name, data_root, results_inf_all_root,
                       tp_threshold=0.50, fp_threshold=0.30,
                       start_tp_num=25, start_fp_num=25,
                       use_histogram=False):
@@ -422,7 +422,7 @@ def run_tsbp_pipeline(model_name, data_root, results_inf_root,
     Args:
         model_name: Name of the model (for folder structure)
         data_root: Root directory containing images
-        results_inf_root: Root directory containing inference results
+        results_inf_all_root: Root directory containing inference results
         tp_threshold: Confidence threshold for high-confidence detections
         fp_threshold: Confidence threshold for low-confidence detections
         start_tp_num: Number of TP clusters
@@ -430,8 +430,8 @@ def run_tsbp_pipeline(model_name, data_root, results_inf_root,
         use_histogram: Whether to use color histogram features
     """
     image_dir = f"{data_root}/images/test/"
-    infer_dir = f"{results_inf_root}/{model_name}/"
-    out_dir = f"{results_inf_root}/{model_name}/tsbp/"
+    infer_dir = f"{results_inf_all_root}/{model_name}/"
+    out_dir = f"{results_inf_all_root}/{model_name}/tsbp/"
 
     print("=" * 60)
     print("TSBP: Test-time Self-guided Bounding-box Propagation")
@@ -459,12 +459,12 @@ def run_tsbp_pipeline(model_name, data_root, results_inf_root,
 
 if __name__ == "__main__":
     # Example usage
-    from constants import results_inf_root, data_root, MODEL
+    from constants import results_inf_all_root, data_root, MODEL
 
     run_tsbp_pipeline(
         model_name=MODEL,
         data_root=data_root,
-        results_inf_root=results_inf_root,
+        results_inf_all_root=results_inf_all_root,
         tp_threshold=0.50, # accepted
         fp_threshold=0.30, # discarded, between are candidates?
         start_tp_num=25,

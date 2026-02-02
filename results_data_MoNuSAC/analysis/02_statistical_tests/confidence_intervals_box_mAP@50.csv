@@ -1,0 +1,9 @@
+model,dataset,metric,mean,std,ci_lower,ci_upper,ci_width
+rtdetr,MoNuSAC,box_mAP@50,0.306,0,0.306,0.306,0.0
+yolo8,MoNuSAC,box_mAP@50,0.748,0,0.748,0.748,0.0
+yolo9,MoNuSAC,box_mAP@50,0.744,0,0.744,0.744,0.0
+yolo10,MoNuSAC,box_mAP@50,0.699,0,0.699,0.699,0.0
+yolo11,MoNuSAC,box_mAP@50,0.777,0,0.777,0.777,0.0
+yolo12,MoNuSAC,box_mAP@50,0.721,0,0.721,0.721,0.0
+yoloe,MoNuSAC,box_mAP@50,0.773,0,0.773,0.773,0.0
+yolow,MoNuSAC,box_mAP@50,0.78,0,0.78,0.78,0.0

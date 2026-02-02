@@ -258,7 +258,7 @@ class DetectionEvaluator:
                     labs.append(0)
 
         if DEBUG:
-            features = np.load(f"{results_inf_root}/{MODEL}/cluster_refined2/features/{image_name}.npy", allow_pickle=True)
+            features = np.load(f"{results_inf_all_root}/{MODEL}/cluster_refined2/features/{image_name}.npy", allow_pickle=True)
 
             features = features[preds_argsorted]
 
@@ -652,13 +652,13 @@ def create_comparison_plots(df, detailed_results, output_dir):
     print(f"Plots saved to: {output_dir}")
 
 
-def run_full_comparison(data_root, results_inf_root, model_name, thresholds=[0.3, 0.5, 0.7]):
+def run_full_comparison(data_root, results_inf_all_root, model_name, thresholds=[0.3, 0.5, 0.7]):
     """
     Run full comparison: Hard thresholds vs TSBP vs SimProp.
 
     Args:
         data_root: Root data directory
-        results_inf_root: Root results directory
+        results_inf_all_root: Root results directory
         model_name: Model name
         thresholds: List of confidence thresholds to test
 
@@ -666,8 +666,8 @@ def run_full_comparison(data_root, results_inf_root, model_name, thresholds=[0.3
         DataFrame with comparison results
     """
     label_dir = f"{data_root}/labels/test/"
-    base_pred_dir = f"{results_inf_root}/{model_name}/"
-    output_dir = f"{results_inf_root}/{model_name}/comparison/"
+    base_pred_dir = f"{results_inf_all_root}/{model_name}/"
+    output_dir = f"{results_inf_all_root}/{model_name}/comparison/"
 
     print("=" * 80)
     print("FULL METHOD COMPARISON")
@@ -687,7 +687,7 @@ def run_full_comparison(data_root, results_inf_root, model_name, thresholds=[0.3
 
     for thresh in thresholds:
         # Create temporary directory with thresholded predictions
-        thresh_dir = f"{results_inf_root}/{model_name}/threshold_{thresh}/"
+        thresh_dir = f"{results_inf_all_root}/{model_name}/threshold_{thresh}/"
         os.makedirs(thresh_dir, exist_ok=True)
 
         # Apply threshold and save
@@ -707,7 +707,7 @@ def run_full_comparison(data_root, results_inf_root, model_name, thresholds=[0.3
         method_names.append(f"Threshold {thresh}")
 
     # 2. TSBP (if exists)
-    tsbp_dir = f"{results_inf_root}/{model_name}/tsbp/"
+    tsbp_dir = f"{results_inf_all_root}/{model_name}/tsbp/"
     if os.path.exists(tsbp_dir) and os.listdir(tsbp_dir):
         pred_dirs.append(tsbp_dir)
         method_names.append("TSBP")
@@ -715,18 +715,18 @@ def run_full_comparison(data_root, results_inf_root, model_name, thresholds=[0.3
     # # 3. Similarity Propagation (if exists)
     # simprop = "simprop"
     # for simprop_type in ["_knn", "_density", "_voting"]:
-    #     sim_dir = f"{results_inf_root}/{model_name}/{simprop}{simprop_type}/"
+    #     sim_dir = f"{results_inf_all_root}/{model_name}/{simprop}{simprop_type}/"
     #     if os.path.exists(sim_dir) and os.listdir(sim_dir):
     #         pred_dirs.append(sim_dir)
     #         method_names.append(f"{simprop}{simprop_type}")
 
     # 4
-    clust_dir = f"{results_inf_root}/{model_name}/cluster_refined/"
+    clust_dir = f"{results_inf_all_root}/{model_name}/cluster_refined/"
     if os.path.exists(clust_dir) and os.listdir(clust_dir):
         pred_dirs.append(clust_dir)
         method_names.append("Clust")
 
-    clust_dir = f"{results_inf_root}/{model_name}/cluster_refined2/"
+    clust_dir = f"{results_inf_all_root}/{model_name}/cluster_refined2/"
     if os.path.exists(clust_dir) and os.listdir(clust_dir):
         pred_dirs.append(clust_dir)
         method_names.append("Clust2")
@@ -744,21 +744,21 @@ if __name__ == "__main__":
             images / test /  # Test images
             labels / test /  # Ground truth (class, x, y, w, h)
 
-        {results_inf_root} /
+        {results_inf_all_root} /
             {model_name} /                          # Base predictions (all boxes, no threshold)
             {model_name} / tsbp /                   # TSBP results
             {model_name} / similarity_prop /        # SimProp results
             {model_name} / comparison /             # Output comparison results
     """
 
-    from constants import results_inf_root, data_root, MODEL
+    from constants import results_inf_all_root, data_root, MODEL
 
     DEBUG = False
     df, detailed = run_full_comparison(
         data_root=data_root,
-        results_inf_root=results_inf_root,
+        results_inf_all_root=results_inf_all_root,
         model_name=MODEL,
         thresholds=[0.00, 0.05, 0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6]  # Test multiple thresholds
     )
 
-    print(f"Results saved to: {results_inf_root}/{MODEL}/comparison/")
+    print(f"Results saved to: {results_inf_all_root}/{MODEL}/comparison/")

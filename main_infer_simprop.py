@@ -476,21 +476,21 @@ class ClusterRefinement:
         print(f"Analysis saved to: {analysis_dir}")
 
 
-def run_cluster_refinement(model_name, data_root, results_inf_root, top_percentile=90, k_per_class=10, k_cross_class=10):
+def run_cluster_refinement(model_name, data_root, results_inf_all_root, top_percentile=90, k_per_class=10, k_cross_class=10):
     """
     Run cluster-based detection refinement.
 
     Args:
         model_name: Model name
         data_root: Root data directory
-        results_inf_root: Root results directory
+        results_inf_all_root: Root results directory
         top_percentile: Percentile for anchor selection per class (default: 90 = top 10%)
         k_per_class: Number of clusters for per-class clustering
         k_cross_class: Number of clusters for cross-class clustering
     """
     image_dir = f"{data_root}/images/test/"
-    infer_dir = f"{results_inf_root}/{model_name}/"
-    out_dir = f"{results_inf_root}/{model_name}/cluster_refined2/"
+    infer_dir = f"{results_inf_all_root}/{model_name}/"
+    out_dir = f"{results_inf_all_root}/{model_name}/cluster_refined2/"
     analysis_dir = os.path.join(out_dir, 'analysis')
     os.makedirs(analysis_dir, exist_ok=True)
 
@@ -508,12 +508,12 @@ def run_cluster_refinement(model_name, data_root, results_inf_root, top_percenti
 
 
 if __name__ == "__main__":
-    from constants import results_inf_root, data_root, MODEL
+    from constants import results_inf_all_root, data_root, MODEL
 
     results = run_cluster_refinement(
         model_name=MODEL,
         data_root=data_root,
-        results_inf_root=results_inf_root,
+        results_inf_all_root=results_inf_all_root,
         top_percentile=90,  # Top 10% as anchors per class
         k_per_class=10,  # 10 clusters per class
         k_cross_class=10  # 10 clusters across all classes

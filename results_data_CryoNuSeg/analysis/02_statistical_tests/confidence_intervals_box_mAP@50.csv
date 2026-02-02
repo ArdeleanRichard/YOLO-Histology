@@ -1,0 +1,9 @@
+model,dataset,metric,mean,std,ci_lower,ci_upper,ci_width
+rtdetr,CryoNuSeg,box_mAP@50,0.031,0.0,0.031,0.031,0.0
+yolo8,CryoNuSeg,box_mAP@50,0.773,0.0,0.773,0.773,0.0
+yolo9,CryoNuSeg,box_mAP@50,0.746,0.0,0.746,0.746,0.0
+yolo10,CryoNuSeg,box_mAP@50,0.675,0.0,0.675,0.675,0.0
+yolo11,CryoNuSeg,box_mAP@50,0.781,0.0,0.781,0.781,0.0
+yolo12,CryoNuSeg,box_mAP@50,0.781,0.0,0.781,0.781,0.0
+yoloe,CryoNuSeg,box_mAP@50,0.564946028655701,0.26453426317085593,0.19832698165568763,0.9315650756557143,0.7332380940000267
+yolow,CryoNuSeg,box_mAP@50,0.754,0.0,0.754,0.754,0.0
