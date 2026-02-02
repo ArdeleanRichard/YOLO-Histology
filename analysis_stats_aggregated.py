@@ -233,8 +233,9 @@ class AggregatedObjectSizeAnalyzer:
         
         plt.xlabel('Object Size Category', fontsize=12)
         plt.ylabel('F1 Score', fontsize=12)
-        plt.title('Aggregated F1 Score by Object Size (All Datasets)', fontsize=14, fontweight='bold')
-        plt.xticks(x + width * (len(self.models) - 1) / 2, categories)
+        plt.title('F1 Score by Object Size (All Datasets)', fontsize=14, fontweight='bold')
+        categories_plot = ['tiny\n<0.01%', 'small\n0.01% - 0.1%', 'medium\n0.1% - 1%', 'large\n>1%']
+        plt.xticks(x + width * (len(self.models) - 1) / 2, categories_plot)
         plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.grid(axis='y', alpha=0.3)
         plt.tight_layout()
@@ -246,9 +247,8 @@ class AggregatedObjectSizeAnalyzer:
         pivot_df = pivot_df[categories]  # Ensure correct order
         
         plt.figure(figsize=(10, 6))
-        sns.heatmap(pivot_df, annot=True, fmt='.3f', cmap='RdYlGn',
-                   vmin=0, vmax=1, cbar_kws={'label': 'F1 Score'})
-        plt.title('Aggregated F1 Score Heatmap by Size Category', fontsize=14, fontweight='bold')
+        sns.heatmap(pivot_df, annot=True, fmt='.3f', cmap='RdYlGn', vmin=0, vmax=1, cbar_kws={'label': 'F1 Score'})
+        plt.title('F1 Score by Size Category', fontsize=14, fontweight='bold')
         plt.xlabel('Object Size Category', fontsize=12)
         plt.ylabel('Model', fontsize=12)
         plt.tight_layout()
@@ -272,8 +272,9 @@ class AggregatedObjectSizeAnalyzer:
                 f1_scores = [model_data[model_data['size_category'] == cat]['f1'].values[0]
                             if len(model_data[model_data['size_category'] == cat]) > 0 else 0
                             for cat in categories]
-                
-                ax.plot(categories, f1_scores, marker='o', label=model.upper(), linewidth=2)
+
+                categories_plot = ['tiny\n<0.01%', 'small\n0.01% - 0.1%', 'medium\n0.1% - 1%', 'large\n>1%']
+                ax.plot(categories_plot, f1_scores, marker='o', label=model.upper(), linewidth=2)
             
             ax.set_title(f'{dataset}', fontsize=12, fontweight='bold')
             ax.set_xlabel('Size Category', fontsize=10)
@@ -286,8 +287,7 @@ class AggregatedObjectSizeAnalyzer:
         for idx in range(len(datasets), len(axes)):
             axes[idx].set_visible(False)
         
-        plt.suptitle('F1 Score by Size Category - Per Dataset Comparison',
-                    fontsize=16, fontweight='bold')
+        plt.suptitle('F1 Score by Size Category - Per Dataset Comparison', fontsize=16, fontweight='bold')
         plt.tight_layout()
         plt.savefig(os.path.join(self.output_dir, 'f1_by_size_per_dataset.png'), dpi=300)
         plt.close()
@@ -322,8 +322,7 @@ class AggregatedStatisticalAnalyzer:
         combined_df = pd.concat(all_dfs, ignore_index=True)
         return combined_df
     
-    def compute_aggregated_confidence_intervals(self, metric: str = 'box_mAP@50',
-                                               confidence: float = 0.95) -> pd.DataFrame:
+    def compute_aggregated_confidence_intervals(self, metric: str = 'box_mAP@50', confidence: float = 0.95) -> pd.DataFrame:
         """Compute confidence intervals aggregated across datasets"""
         combined_df = self.load_all_results()
         
@@ -418,10 +417,8 @@ class AggregatedStatisticalAnalyzer:
                 data2 = []
                 
                 for dataset in combined_df['dataset'].unique():
-                    m1_data = combined_df[(combined_df['model'] == model1) &
-                                         (combined_df['dataset'] == dataset)]
-                    m2_data = combined_df[(combined_df['model'] == model2) &
-                                         (combined_df['dataset'] == dataset)]
+                    m1_data = combined_df[(combined_df['model'] == model1) & (combined_df['dataset'] == dataset)]
+                    m2_data = combined_df[(combined_df['model'] == model2) & (combined_df['dataset'] == dataset)]
                     
                     if len(m1_data) > 0 and len(m2_data) > 0:
                         data1.append(m1_data[metric].values[0])
@@ -702,8 +699,7 @@ class AggregatedFailureModeAnalyzer:
         df_plot.plot(kind='bar', stacked=True, figsize=(12, 6),
                     colormap='Set3', edgecolor='black', linewidth=0.5)
         
-        plt.title('Aggregated Failure Mode Distribution by Model (All Datasets)',
-                 fontsize=14, fontweight='bold')
+        plt.title('Failure Mode Distribution by Model (All Datasets)', fontsize=14, fontweight='bold')
         plt.xlabel('Model', fontsize=12)
         plt.ylabel('Number of Failures', fontsize=12)
         plt.legend(title='Failure Mode', bbox_to_anchor=(1.05, 1), loc='upper left')
@@ -725,8 +721,7 @@ class AggregatedFailureModeAnalyzer:
             ax = axes[idx]
             dataset_df = df[df['dataset'] == dataset].set_index('model')[failure_cols]
             
-            dataset_df.plot(kind='bar', stacked=True, ax=ax,
-                          colormap='Set3', edgecolor='black', linewidth=0.5)
+            dataset_df.plot(kind='bar', stacked=True, ax=ax, colormap='Set3', edgecolor='black', linewidth=0.5)
             
             ax.set_title(f'{dataset}', fontsize=12, fontweight='bold')
             ax.set_xlabel('Model', fontsize=10)
@@ -740,11 +735,9 @@ class AggregatedFailureModeAnalyzer:
         
         # Add legend to the figure
         handles, labels = axes[0].get_legend_handles_labels()
-        fig.legend(handles, labels, title='Failure Mode',
-                  loc='center left', bbox_to_anchor=(0.95, 0.5))
+        fig.legend(handles, labels, title='Failure Mode', loc='center left', bbox_to_anchor=(0.95, 0.5))
         
-        plt.suptitle('Failure Modes - Per Dataset Comparison',
-                    fontsize=16, fontweight='bold')
+        plt.suptitle('Failure Modes - Per Dataset Comparison', fontsize=16, fontweight='bold')
         plt.tight_layout(rect=[0, 0, 0.95, 1])
         plt.savefig(os.path.join(self.output_dir, 'failure_modes_per_dataset.png'), dpi=300)
         plt.close()

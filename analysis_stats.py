@@ -469,10 +469,8 @@ class StatisticalAnalyzer:
                     values2 = []
 
                     for dataset in datasets:
-                        val1 = self.df[(self.df['model'] == model1) &
-                                      (self.df['dataset'] == dataset)][metric].values
-                        val2 = self.df[(self.df['model'] == model2) &
-                                      (self.df['dataset'] == dataset)][metric].values
+                        val1 = self.df[(self.df['model'] == model1) & (self.df['dataset'] == dataset)][metric].values
+                        val2 = self.df[(self.df['model'] == model2) & (self.df['dataset'] == dataset)][metric].values
 
                         if len(val1) > 0 and len(val2) > 0:
                             values1.append(val1[0])
