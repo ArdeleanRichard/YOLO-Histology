@@ -4,11 +4,12 @@ import os
 
 # MODEL OPTIONS: ["rtdetr", "yolo8", "yolo9", "yolo10", "yolo11", "yolo12", "yoloe", "yolow"]
 MODEL = "yoloe"
+ALL_MODELS = ["rtdetr", "yolo8", "yolo9", "yolo10", "yolo11", "yolo12", "yolow", "yoloe"]
 
 # DATA OPTIONS: ["BCNB", "nuclei", "TNBC", "MoNuSAC", "CryoNuSeg"]
 DATA = "CryoNuSeg"
 
-ALL_MODELS = ["rtdetr", "yolo8", "yolo9", "yolo10", "yolo11", "yolo12", "yolow", "yoloe"]
+
 data_root = f"./data/{DATA}/"
 
 download_model_root = f"./models/"
@@ -20,11 +21,11 @@ results_fig_root = f"{results_root}/figs/"
 results_inf_root = f"{results_root}/inferences/"
 results_inf_all_root = f"{results_root}/inferences_all/"
 os.makedirs(results_root, exist_ok=True)
+os.makedirs(results_all_root, exist_ok=True)
 os.makedirs(results_saved_model_root, exist_ok=True)
 os.makedirs(results_fig_root, exist_ok=True)
 os.makedirs(results_inf_root, exist_ok=True)
 os.makedirs(results_inf_all_root, exist_ok=True)
-os.makedirs(results_all_root, exist_ok=True)
 
 image_folder = f"{data_root}/images/test/"  # Folder with images
 label_folder = f"{data_root}/labels/test/"  # Folder with ground truth YOLO labels (txt)

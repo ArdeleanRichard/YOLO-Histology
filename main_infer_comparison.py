@@ -2,8 +2,6 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import umap
-from sklearn.decomposition import PCA
 
 
 class DetectionEvaluator:
@@ -218,9 +216,6 @@ class DetectionEvaluator:
         # Track which labels have been matched
         matched_labels = set()
 
-        if DEBUG:
-            labs = []
-            alps = []
         for id, pred in enumerate(preds_sorted):
             pred_class, pred_x, pred_y, pred_w, pred_h, pred_score = pred
 
@@ -248,41 +243,9 @@ class DetectionEvaluator:
             if best_iou >= iou_threshold:
                 tp.append((pred_score, best_iou))
                 matched_labels.add(best_label_idx)
-                if DEBUG:
-                    labs.append(1)
-                    alps.append(pred_score)
             else:
                 fp.append((pred_score,))
-                if DEBUG:
-                    alps.append(pred_score)
-                    labs.append(0)
 
-        if DEBUG:
-            features = np.load(f"{results_inf_all_root}/{MODEL}/cluster_refined2/features/{image_name}.npy", allow_pickle=True)
-
-            features = features[preds_argsorted]
-
-            # pca = PCA(n_components=2)
-            # X = pca.fit_transform(features)
-
-            reducer = umap.UMAP(
-                n_neighbors=15,
-                min_dist=0.1,
-                n_components=2,
-                random_state=42
-            )
-
-            X = reducer.fit_transform(features)
-
-            alps = np.array(alps)
-            labs = np.array(labs)
-            color_dict = {0: 'red', 1: "green"}
-            plt.scatter(X[:, 0], X[:, 1], c=[color_dict[x] for x in labs], alpha=((alps / max(alps)) + 3) / 4, edgecolors="k")
-            plt.figure()
-            plt.hist(alps[labs == 0], bins=100, alpha=0.6, label='FP')
-            plt.hist(alps[labs == 1], bins=100, alpha=0.6, label='TP')
-            plt.legend()
-            plt.show()
 
         # False negatives are unmatched labels
         fn_count = len(labels) - len(matched_labels)
@@ -691,12 +654,12 @@ def run_full_comparison(data_root, results_inf_all_root, model_name, thresholds=
         pred_dirs.append(thresh_dir)
         method_names.append(f"Threshold {thresh}")
 
+
     # 2. TSBP (if exists)
     tsbp_dir = f"{results_inf_all_root}/{model_name}/tsbp/"
     if os.path.exists(tsbp_dir) and os.listdir(tsbp_dir):
         pred_dirs.append(tsbp_dir)
         method_names.append("TSBP")
-
 
     tsbp_dir = f"{results_inf_all_root}/{model_name}/tsbp_adaptive/"
     if os.path.exists(tsbp_dir) and os.listdir(tsbp_dir):
@@ -713,25 +676,6 @@ def run_full_comparison(data_root, results_inf_all_root, model_name, thresholds=
         pred_dirs.append(tsbp_dir)
         method_names.append("TSBP_PP")
 
-
-    # # 3. Similarity Propagation (if exists)
-    # simprop = "simprop"
-    # for simprop_type in ["_knn", "_density", "_voting"]:
-    #     sim_dir = f"{results_inf_all_root}/{model_name}/{simprop}{simprop_type}/"
-    #     if os.path.exists(sim_dir) and os.listdir(sim_dir):
-    #         pred_dirs.append(sim_dir)
-    #         method_names.append(f"{simprop}{simprop_type}")
-
-    # 4
-    clust_dir = f"{results_inf_all_root}/{model_name}/cluster_refined/"
-    if os.path.exists(clust_dir) and os.listdir(clust_dir):
-        pred_dirs.append(clust_dir)
-        method_names.append("Clust")
-
-    clust_dir = f"{results_inf_all_root}/{model_name}/cluster_refined2/"
-    if os.path.exists(clust_dir) and os.listdir(clust_dir):
-        pred_dirs.append(clust_dir)
-        method_names.append("Clust2")
 
     # Run comparison
     df, detailed = compare_methods(label_dir, pred_dirs, method_names, output_dir)
@@ -750,11 +694,8 @@ if __name__ == "__main__":
         {results_inf_all_root} /
             {model_name} /                          # Base predictions (all boxes, no threshold)
             {model_name} / tsbp /                   # TSBP results
-            {model_name} / similarity_prop /        # SimProp results
             {model_name} / comparison /             # Output comparison results
     """
-    DEBUG = False
-
     # from constants import results_inf_all_root, data_root, MODEL
     #
     # df, detailed = run_full_comparison(

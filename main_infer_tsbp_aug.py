@@ -158,6 +158,51 @@ class TS:
     def __init__(self):
         pass
 
+    def load_detections(self, txt_path, img_path, use_histogram=False):
+        """Load detections from YOLO format text file"""
+        if not os.path.exists(txt_path):
+            return []
+
+        img = Image.open(img_path).convert('RGB')
+        img_width, img_height = img.size
+        detections = []
+
+        with open(txt_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+
+                parts = line.split(',')
+                if len(parts) != 6:
+                    continue
+
+                class_id, x, y, w, h, score = [float(p.strip()) for p in parts]
+
+                x1, y1 = int(x), int(y)
+                x2, y2 = int(x + w), int(y + h)
+
+                if x2 <= x1 + 2 or y2 <= y1 + 2:
+                    continue
+
+                crop = img.crop((x1, y1, x2, y2))
+                features = self.extract_features(crop, use_histogram)
+
+                # Calculate bbox center for spatial consistency
+                center_x = (x1 + x2) / 2.0
+                center_y = (y1 + y2) / 2.0
+
+                detection = {
+                    'bbox': (x1, y1, x2, y2),
+                    'bbox_orig': (x, y, w, h),
+                    'score': score,
+                    'class': int(class_id),
+                    'feature': features,
+                    'center': np.array([center_x / img_width, center_y / img_height])  # normalized
+                }
+                detections.append(detection)
+
+        return detections
 
     def compute_adaptive_thresholds(self, detections, tp_quantile=0.8, fp_quantile=0.2):
         """
@@ -183,6 +228,71 @@ class TS:
             thresholds[class_id] = (tp_thresh, fp_thresh)
 
         return thresholds
+
+    def kmeans_clustering(self, detections, num_clusters):
+        """Apply K-means clustering"""
+        if len(detections) < num_clusters:
+            return detections, [d['feature'] for d in detections]
+
+        features = torch.stack([d['feature'] for d in detections])
+
+        kmeans = KMeans(n_clusters=num_clusters, max_iter=500, n_init=10, random_state=1234)
+        kmeans.fit(features.numpy())
+
+        clustered_dets = []
+        clustered_feats = []
+        for i in range(num_clusters):
+            det = {
+                'bbox': (0, 0, 0, 0),
+                'bbox_orig': (0, 0, 0, 0),
+                'score': 1.0,
+                'class': detections[0]['class'],
+                'feature': torch.from_numpy(kmeans.cluster_centers_[i]),
+                'center': np.array([0.5, 0.5]),
+                'is_cluster_center': True
+            }
+            clustered_dets.append(det)
+            clustered_feats.append(det['feature'])
+
+        return clustered_dets, clustered_feats
+
+    def cal_min_dist_stats(self, detections):
+        """Calculate distance statistics"""
+        if len(detections) < 2:
+            return float('inf'), float('inf')
+
+        features = torch.stack([d['feature'] for d in detections])
+        distances = torch.cdist(features, features, p=2)
+        distances.fill_diagonal_(float('inf'))
+
+        min_distances, _ = torch.min(distances, dim=1)
+        min_distances, _ = torch.sort(min_distances)
+
+        min_dis = float(min_distances[0])
+        dist_avg = float(torch.sum(min_distances) / len(detections))
+
+        return dist_avg, min_dis
+
+    def _save_results(self, final_detections, image_detections, out_dir):
+        """Save refined detection results"""
+        for det in final_detections:
+            img_name = det.get('img_name')
+            if img_name:
+                if img_name not in image_detections:
+                    image_detections[img_name] = []
+                image_detections[img_name].append(det)
+
+        for img_name, dets in image_detections.items():
+            out_path = os.path.join(out_dir, f"{img_name}.txt")
+            with open(out_path, 'w') as f:
+                for det in dets:
+                    x, y, w, h = det['bbox_orig']
+                    score = det.get('propagated_tp_score', det['score'])
+                    class_id = det['class']
+                    f.write(f"{class_id}, {int(x)}, {int(y)}, {int(w)}, {int(h)}, {score}\n")
+
+        print(f"Results saved to {out_dir}")
+
 
 # ============================================================================
 # OPTION A: ADAPTIVE TSBP
@@ -213,11 +323,17 @@ class AdaptiveTSBP(TS):
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
 
-    def extract_features(self, image_pil):
+    def extract_features(self, image_pil, use_histogram=False):
         """Extract deep features from image crop using ResNet50"""
         image_tensor = self.transform(image_pil).unsqueeze(0).to(self.device)
         with torch.no_grad():
             features = self.resnet(image_tensor).squeeze().cpu()
+
+        if use_histogram:
+            image_bgr = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
+            hist = self.calc_hist(image_bgr) * 15
+            features = torch.from_numpy(np.concatenate((hist, features.numpy())))
+
         return features
 
     def calc_hist(self, img_bgr):
@@ -226,62 +342,6 @@ class AdaptiveTSBP(TS):
         hist = cv2.normalize(hist, hist).flatten()
         return hist
 
-    def extract_features_with_hist(self, image_pil):
-        """Extract combined features: ResNet50 + color histogram"""
-        deep_features = self.extract_features(image_pil)
-        image_bgr = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
-        hist = self.calc_hist(image_bgr) * 15
-        features = torch.from_numpy(np.concatenate((hist, deep_features.numpy())))
-        return features
-
-    def load_detections(self, txt_path, img_path, use_histogram=False):
-        """Load detections from YOLO format text file"""
-        if not os.path.exists(txt_path):
-            return []
-
-        img = Image.open(img_path).convert('RGB')
-        img_width, img_height = img.size
-        detections = []
-
-        with open(txt_path, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-
-                parts = line.split(',')
-                if len(parts) != 6:
-                    continue
-
-                class_id, x, y, w, h, score = [float(p.strip()) for p in parts]
-
-                x1, y1 = int(x), int(y)
-                x2, y2 = int(x + w), int(y + h)
-
-                if x2 <= x1 + 2 or y2 <= y1 + 2:
-                    continue
-
-                crop = img.crop((x1, y1, x2, y2))
-                if use_histogram:
-                    features = self.extract_features_with_hist(crop)
-                else:
-                    features = self.extract_features(crop)
-
-                # Calculate bbox center for spatial consistency
-                center_x = (x1 + x2) / 2.0
-                center_y = (y1 + y2) / 2.0
-
-                detection = {
-                    'bbox': (x1, y1, x2, y2),
-                    'bbox_orig': (x, y, w, h),
-                    'score': score,
-                    'class': int(class_id),
-                    'feature': features,
-                    'center': np.array([center_x / img_width, center_y / img_height])  # normalized
-                }
-                detections.append(detection)
-
-        return detections
 
 
     def compute_spatial_distance(self, det1, det2, sigma_spatial=0.2):
@@ -328,49 +388,6 @@ class AdaptiveTSBP(TS):
 
         return min(1.0, refined_score)  # Cap at 1.0
 
-    def kmeans_clustering(self, detections, num_clusters):
-        """Apply K-means clustering to detections"""
-        if len(detections) < num_clusters:
-            return detections, [d['feature'] for d in detections]
-
-        features = torch.stack([d['feature'] for d in detections])
-
-        kmeans = KMeans(n_clusters=num_clusters, max_iter=500, n_init=10, random_state=1234)
-        kmeans.fit(features.numpy())
-
-        clustered_dets = []
-        clustered_feats = []
-        for i in range(num_clusters):
-            det = {
-                'bbox': (0, 0, 0, 0),
-                'bbox_orig': (0, 0, 0, 0),
-                'score': 1.0,
-                'class': detections[0]['class'],
-                'feature': torch.from_numpy(kmeans.cluster_centers_[i]),
-                'center': np.array([0.5, 0.5]),  # dummy center
-                'is_cluster_center': True
-            }
-            clustered_dets.append(det)
-            clustered_feats.append(det['feature'])
-
-        return clustered_dets, clustered_feats
-
-    def cal_min_dist_stats(self, detections):
-        """Calculate average minimum distance between detections"""
-        if len(detections) < 2:
-            return float('inf'), float('inf')
-
-        features = torch.stack([d['feature'] for d in detections])
-        distances = torch.cdist(features, features, p=2)
-        distances.fill_diagonal_(float('inf'))
-
-        min_distances, _ = torch.min(distances, dim=1)
-        min_distances, _ = torch.sort(min_distances)
-
-        min_dis = float(min_distances[0])
-        dist_avg = float(torch.sum(min_distances) / len(detections))
-
-        return dist_avg, min_dis
 
     def run_tsbp(self, image_dir, infer_dir, out_dir,
                  tp_quantile=0.8, fp_quantile=0.2,
@@ -630,26 +647,6 @@ class AdaptiveTSBP(TS):
 
         self._save_results(all_tp_orig, image_detections, out_dir)
 
-    def _save_results(self, final_detections, image_detections, out_dir):
-        """Save refined detection results to text files"""
-        for det in final_detections:
-            img_name = det.get('img_name')
-            if img_name:
-                if img_name not in image_detections:
-                    image_detections[img_name] = []
-                image_detections[img_name].append(det)
-
-        for img_name, dets in image_detections.items():
-            out_path = os.path.join(out_dir, f"{img_name}.txt")
-            with open(out_path, 'w') as f:
-                for det in dets:
-                    x, y, w, h = det['bbox_orig']
-                    score = det['score']
-                    class_id = det['class']
-                    f.write(f"{class_id}, {int(x)}, {int(y)}, {int(w)}, {int(h)}, {score}\n")
-
-        print(f"Results saved to {out_dir}")
-
 
 # ============================================================================
 # OPTION B: HIERARCHICAL FEATURE TSBP
@@ -763,47 +760,12 @@ class HierarchicalFeatureTSBP(TS):
 
         return fused
 
-    def load_detections(self, txt_path, img_path, use_histogram=False):
-        """Load detections with multi-scale features"""
-        if not os.path.exists(txt_path):
-            return []
 
-        img = Image.open(img_path).convert('RGB')
-        detections = []
+    def extract_features(self, image_pil, use_histogram=False):
+        features_list = self.extract_multiscale_features(image_pil, use_histogram)
+        fused_feature = self.fuse_features(features_list)
 
-        with open(txt_path, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-
-                parts = line.split(',')
-                if len(parts) != 6:
-                    continue
-
-                class_id, x, y, w, h, score = [float(p.strip()) for p in parts]
-
-                x1, y1 = int(x), int(y)
-                x2, y2 = int(x + w), int(y + h)
-
-                if x2 <= x1 + 2 or y2 <= y1 + 2:
-                    continue
-
-                crop = img.crop((x1, y1, x2, y2))
-                features_list = self.extract_multiscale_features(crop, use_histogram)
-                fused_feature = self.fuse_features(features_list)
-
-                detection = {
-                    'bbox': (x1, y1, x2, y2),
-                    'bbox_orig': (x, y, w, h),
-                    'score': score,
-                    'class': int(class_id),
-                    'feature': fused_feature,
-                    'features_list': features_list  # Keep for analysis
-                }
-                detections.append(detection)
-
-        return detections
+        return fused_feature
 
     def build_similarity_graph(self, detections, k_neighbors=10):
         """
@@ -1023,26 +985,6 @@ class HierarchicalFeatureTSBP(TS):
 
         self._save_results(final_tp, image_detections, out_dir)
 
-    def _save_results(self, final_detections, image_detections, out_dir):
-        """Save refined detection results to text files"""
-        for det in final_detections:
-            img_name = det.get('img_name')
-            if img_name:
-                if img_name not in image_detections:
-                    image_detections[img_name] = []
-                image_detections[img_name].append(det)
-
-        for img_name, dets in image_detections.items():
-            out_path = os.path.join(out_dir, f"{img_name}.txt")
-            with open(out_path, 'w') as f:
-                for det in dets:
-                    x, y, w, h = det['bbox_orig']
-                    score = det.get('propagated_tp_score', det['score'])
-                    class_id = det['class']
-                    f.write(f"{class_id}, {int(x)}, {int(y)}, {int(w)}, {int(h)}, {score}\n")
-
-        print(f"Results saved to {out_dir}")
-
 
 # ============================================================================
 # OPTION C: TSBP++
@@ -1106,8 +1048,7 @@ class TSBPPlusPlus(TS):
 
         if use_histogram:
             image_bgr = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
-            hist = cv2.calcHist([image_bgr], [0, 1, 2], None, [8, 8, 8],
-                                [0, 256, 0, 256, 0, 256])
+            hist = cv2.calcHist([image_bgr], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
             hist = cv2.normalize(hist, hist).flatten()
             hist_tensor = torch.from_numpy(hist).float()
             features_list.append(hist_tensor)
@@ -1132,51 +1073,11 @@ class TSBPPlusPlus(TS):
 
         return fused
 
-    def load_detections(self, txt_path, img_path, use_histogram=False):
-        """Load detections with multi-scale features and spatial info"""
-        if not os.path.exists(txt_path):
-            return []
+    def extract_features(self, image_pil, use_histogram=False):
+        features_list = self.extract_multiscale_features(image_pil, use_histogram)
+        fused_feature = self.fuse_features(features_list)
 
-        img = Image.open(img_path).convert('RGB')
-        img_width, img_height = img.size
-        detections = []
-
-        with open(txt_path, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-
-                parts = line.split(',')
-                if len(parts) != 6:
-                    continue
-
-                class_id, x, y, w, h, score = [float(p.strip()) for p in parts]
-
-                x1, y1 = int(x), int(y)
-                x2, y2 = int(x + w), int(y + h)
-
-                if x2 <= x1 + 2 or y2 <= y1 + 2:
-                    continue
-
-                crop = img.crop((x1, y1, x2, y2))
-                features_list = self.extract_multiscale_features(crop, use_histogram)
-                fused_feature = self.fuse_features(features_list)
-
-                center_x = (x1 + x2) / 2.0
-                center_y = (y1 + y2) / 2.0
-
-                detection = {
-                    'bbox': (x1, y1, x2, y2),
-                    'bbox_orig': (x, y, w, h),
-                    'score': score,
-                    'class': int(class_id),
-                    'feature': fused_feature,
-                    'center': np.array([center_x / img_width, center_y / img_height])
-                }
-                detections.append(detection)
-
-        return detections
+        return fused_feature
 
 
     def compute_uncertainty(self, detection, all_detections, k=5):
@@ -1220,49 +1121,8 @@ class TSBPPlusPlus(TS):
 
         return epistemic, aleatoric
 
-    def kmeans_clustering(self, detections, num_clusters):
-        """Apply K-means clustering"""
-        if len(detections) < num_clusters:
-            return detections, [d['feature'] for d in detections]
 
-        features = torch.stack([d['feature'] for d in detections])
 
-        kmeans = KMeans(n_clusters=num_clusters, max_iter=500, n_init=10, random_state=1234)
-        kmeans.fit(features.numpy())
-
-        clustered_dets = []
-        clustered_feats = []
-        for i in range(num_clusters):
-            det = {
-                'bbox': (0, 0, 0, 0),
-                'bbox_orig': (0, 0, 0, 0),
-                'score': 1.0,
-                'class': detections[0]['class'],
-                'feature': torch.from_numpy(kmeans.cluster_centers_[i]),
-                'center': np.array([0.5, 0.5]),
-                'is_cluster_center': True
-            }
-            clustered_dets.append(det)
-            clustered_feats.append(det['feature'])
-
-        return clustered_dets, clustered_feats
-
-    def cal_min_dist_stats(self, detections):
-        """Calculate distance statistics"""
-        if len(detections) < 2:
-            return float('inf'), float('inf')
-
-        features = torch.stack([d['feature'] for d in detections])
-        distances = torch.cdist(features, features, p=2)
-        distances.fill_diagonal_(float('inf'))
-
-        min_distances, _ = torch.min(distances, dim=1)
-        min_distances, _ = torch.sort(min_distances)
-
-        min_dis = float(min_distances[0])
-        dist_avg = float(torch.sum(min_distances) / len(detections))
-
-        return dist_avg, min_dis
 
     def run_class_specific_emd(self, candidates, confirmed_boxes, class_id,
                                thresh_dist, uncertainty_weight=0.5):
@@ -1303,8 +1163,7 @@ class TSBPPlusPlus(TS):
 
         for i in range(len_cand):
             for j in range(len_conf):
-                feat_dist = torch.dist(candidates[i]['feature'],
-                                       confirmed_boxes[j]['feature']).item()
+                feat_dist = torch.dist(candidates[i]['feature'], confirmed_boxes[j]['feature']).item()
 
                 # Uncertainty penalty: higher uncertainty = higher effective distance
                 uncertainty_penalty = 1.0 + uncertainty_weight * uncertainties[i]
@@ -1520,25 +1379,6 @@ class TSBPPlusPlus(TS):
 
         self._save_results(all_final_tp, image_detections, out_dir)
 
-    def _save_results(self, final_detections, image_detections, out_dir):
-        """Save refined detection results"""
-        for det in final_detections:
-            img_name = det.get('img_name')
-            if img_name:
-                if img_name not in image_detections:
-                    image_detections[img_name] = []
-                image_detections[img_name].append(det)
-
-        for img_name, dets in image_detections.items():
-            out_path = os.path.join(out_dir, f"{img_name}.txt")
-            with open(out_path, 'w') as f:
-                for det in dets:
-                    x, y, w, h = det['bbox_orig']
-                    score = det['score']
-                    class_id = det['class']
-                    f.write(f"{class_id}, {int(x)}, {int(y)}, {int(w)}, {int(h)}, {score}\n")
-
-        print(f"Results saved to {out_dir}")
 
 
 # ============================================================================
