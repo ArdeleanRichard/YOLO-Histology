@@ -2,19 +2,15 @@ import numpy as np
 import pandas as pd
 import os
 import cv2
-from scipy import stats
 from scipy.stats import wilcoxon, friedmanchisquare, kruskal
 import matplotlib.pyplot as plt
 import seaborn as sns
 from typing import Dict, List, Tuple, Optional
 from collections import defaultdict
-import json
+from scipy.stats import t
+from itertools import combinations
 
-# Import from original analysis_stats
-from analysis_stats import (
-    BoundingBox, load_yolo_boxes, load_inference_boxes,
-    calculate_iou
-)
+from analysis_stats import (BoundingBox, load_yolo_boxes, load_inference_boxes, calculate_iou)
 
 
 class AggregatedObjectSizeAnalyzer:
@@ -297,210 +293,753 @@ class AggregatedObjectSizeAnalyzer:
 
 class AggregatedStatisticalAnalyzer:
     """
-    Aggregated Statistical Analysis across multiple datasets
+    Comprehensive Statistical Analysis across multiple datasets using:
+    - Friedman test (non-parametric repeated measures)
+    - Nemenyi post-hoc test
+    - Wilcoxon signed-rank test with Bonferroni correction
+    - Effect size calculations (Cohen's d, rank biserial correlation)
+    - Critical difference diagrams
     """
-    
+
     def __init__(self, datasets_info: List[Dict], output_dir: str):
         self.datasets_info = datasets_info
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
-    
+
     def load_all_results(self) -> pd.DataFrame:
         """Load and combine results from all datasets"""
         all_dfs = []
-        
+
         for dataset_info in self.datasets_info:
             csv_path = dataset_info['results_csv']
             if os.path.exists(csv_path):
                 df = pd.read_csv(csv_path)
                 df['dataset'] = dataset_info['name']
                 all_dfs.append(df)
-        
+
         if len(all_dfs) == 0:
             return pd.DataFrame()
-        
+
         combined_df = pd.concat(all_dfs, ignore_index=True)
         return combined_df
-    
-    def compute_aggregated_confidence_intervals(self, metric: str = 'box_mAP@50', confidence: float = 0.95) -> pd.DataFrame:
+
+    def compute_aggregated_confidence_intervals(self, metric: str = 'box_mAP@50',
+                                                confidence: float = 0.95) -> pd.DataFrame:
         """Compute confidence intervals aggregated across datasets"""
         combined_df = self.load_all_results()
-        
+
         if len(combined_df) == 0:
             return pd.DataFrame()
-        
+
         results = []
-        
+
         for model in combined_df['model'].unique():
             model_data = combined_df[combined_df['model'] == model][metric].values
-            
+
             if len(model_data) == 0:
                 continue
-            
+
             mean_val = np.mean(model_data)
             std_val = np.std(model_data, ddof=1)
+            median_val = np.median(model_data)
             n = len(model_data)
-            
+
             # Calculate confidence interval
-            from scipy.stats import t
             confidence_level = confidence
-            df = n - 1
-            t_crit = t.ppf((1 + confidence_level) / 2, df)
+            df_val = n - 1
+            t_crit = t.ppf((1 + confidence_level) / 2, df_val)
             margin_error = t_crit * (std_val / np.sqrt(n))
-            
+
             results.append({
                 'model': model,
                 'mean': mean_val,
+                'median': median_val,
                 'std': std_val,
                 'n_datasets': n,
                 'ci_lower': mean_val - margin_error,
                 'ci_upper': mean_val + margin_error,
-                'confidence_level': confidence_level
+                'confidence_level': confidence_level,
+                'sem': std_val / np.sqrt(n)  # Standard error of mean
             })
-        
+
         df = pd.DataFrame(results)
-        
+
         output_path = os.path.join(self.output_dir, f'{metric}_confidence_intervals_aggregated.csv')
         df.to_csv(output_path, index=False)
         print(f"Confidence intervals saved to: {output_path}")
-        
+
         return df
-    
+
     def plot_aggregated_confidence_intervals(self, df: pd.DataFrame, metric: str):
         """Plot confidence intervals across models"""
         if len(df) == 0:
             return
-        
-        plt.figure(figsize=(12, 6))
-        
+
+        plt.figure(figsize=(14, 6))
+
         df_sorted = df.sort_values('mean', ascending=False)
         models = df_sorted['model'].values
         means = df_sorted['mean'].values
         ci_lower = df_sorted['ci_lower'].values
         ci_upper = df_sorted['ci_upper'].values
-        
+
         x = np.arange(len(models))
-        
+
         plt.errorbar(x, means, yerr=[means - ci_lower, ci_upper - means],
-                    fmt='o', capsize=5, capthick=2, markersize=8,
-                    linewidth=2, color='steelblue')
-        
-        plt.xlabel('Model', fontsize=12)
-        plt.ylabel(f'{metric} (Mean ± CI)', fontsize=12)
-        plt.title(f'Model Performance with Confidence Intervals\n(Aggregated across {df["n_datasets"].iloc[0]:.0f} datasets)',
-                 fontsize=14, fontweight='bold')
+                     fmt='o', capsize=5, capthick=2, markersize=10,
+                     linewidth=2, color='steelblue', elinewidth=2)
+
+        # Add value labels
+        for i, (model, mean) in enumerate(zip(models, means)):
+            plt.text(i, mean, f'{mean:.3f}', ha='center', va='bottom', fontsize=9)
+
+        plt.xlabel('Model', fontsize=12, fontweight='bold')
+        plt.ylabel(f'{metric} (Mean ± 95% CI)', fontsize=12, fontweight='bold')
+        plt.title(
+            f'Model Performance with 95% Confidence Intervals\n(Aggregated across {df["n_datasets"].iloc[0]:.0f} datasets)',
+            fontsize=14, fontweight='bold')
         plt.xticks(x, [m.upper() for m in models], rotation=45, ha='right')
-        plt.grid(axis='y', alpha=0.3)
+        plt.grid(axis='y', alpha=0.3, linestyle='--')
         plt.tight_layout()
-        plt.savefig(os.path.join(self.output_dir, f'{metric}_ci_plot_aggregated.png'), dpi=300)
+        plt.savefig(os.path.join(self.output_dir, f'{metric}_ci_plot_aggregated.png'), dpi=300, bbox_inches='tight')
         plt.close()
-    
-    def cross_dataset_statistical_tests(self, metric: str = 'box_mAP@50') -> pd.DataFrame:
-        """Perform statistical tests comparing models across datasets"""
+
+    def friedman_test(self, metric: str = 'box_mAP@50') -> Dict:
+        """
+        Perform Friedman test to check if there are significant differences between models.
+
+        The Friedman test is a non-parametric test for repeated measures (same datasets tested
+        across all models). It's the non-parametric equivalent of repeated measures ANOVA.
+
+        H0: All models have the same performance
+        H1: At least one model performs differently
+        """
         combined_df = self.load_all_results()
-        
+
+        if len(combined_df) == 0:
+            return {}
+
+        # Prepare data: pivot to have datasets as rows, models as columns
+        pivot_df = combined_df.pivot(index='dataset', columns='model', values=metric)
+
+        # Remove any rows with missing values
+        pivot_df = pivot_df.dropna()
+
+        if len(pivot_df) < 2:
+            print(f"Warning: Need at least 2 datasets for Friedman test. Found {len(pivot_df)}")
+            return {}
+
+        # Extract data for each model
+        model_data = [pivot_df[model].values for model in pivot_df.columns]
+
+        # Perform Friedman test
+        if len(model_data) < 3:
+            print(f"Warning: Friedman test requires at least 3 models. Found {len(model_data)}")
+            return {}
+
+        try:
+            statistic, p_value = friedmanchisquare(*model_data)
+        except Exception as e:
+            print(f"Error performing Friedman test: {e}")
+            return {}
+
+        # Calculate effect size (Kendall's W)
+        n = len(pivot_df)  # number of datasets
+        k = len(model_data)  # number of models
+        kendalls_w = statistic / (n * (k - 1))
+
+        result = {
+            'test': 'Friedman',
+            'statistic': statistic,
+            'p_value': p_value,
+            'n_datasets': n,
+            'n_models': k,
+            'kendalls_w': kendalls_w,
+            'significant': p_value < 0.05,
+            'models': list(pivot_df.columns)
+        }
+
+        # Save results
+        result_df = pd.DataFrame([result])
+        output_path = os.path.join(self.output_dir, f'{metric}_friedman_test.csv')
+        result_df.to_csv(output_path, index=False)
+        print(f"\nFriedman Test Results:")
+        print(f"  Statistic: {statistic:.4f}")
+        print(f"  p-value: {p_value:.4e}")
+        print(f"  Kendall's W (effect size): {kendalls_w:.4f}")
+        print(f"  Significant: {'Yes (p < 0.05)' if p_value < 0.05 else 'No (p ≥ 0.05)'}")
+        print(f"  Results saved to: {output_path}")
+
+        return result
+
+    def nemenyi_post_hoc(self, metric: str = 'box_mAP@50', alpha: float = 0.05) -> pd.DataFrame:
+        """
+        Perform Nemenyi post-hoc test for pairwise comparisons after Friedman test.
+
+        The Nemenyi test computes critical differences between average ranks of models.
+        Models are significantly different if their rank difference exceeds the critical difference.
+        """
+        combined_df = self.load_all_results()
+
         if len(combined_df) == 0:
             return pd.DataFrame()
-        
-        models = combined_df['model'].unique()
+
+        # Prepare data
+        pivot_df = combined_df.pivot(index='dataset', columns='model', values=metric)
+        pivot_df = pivot_df.dropna()
+
+        n = len(pivot_df)  # number of datasets
+        k = len(pivot_df.columns)  # number of models
+
+        # Compute ranks for each dataset (across models)
+        rank_df = pivot_df.rank(axis=1, ascending=False)
+
+        # Compute average ranks for each model
+        avg_ranks = rank_df.mean(axis=0)
+
+        # Critical difference for Nemenyi test
+        # CD = q_alpha * sqrt(k(k+1) / (6n))
+        # q_alpha values for different significance levels (from Nemenyi table)
+        q_alpha_values = {
+            0.05: {3: 2.343, 4: 2.569, 5: 2.728, 6: 2.850, 7: 2.949, 8: 3.031, 9: 3.102, 10: 3.164},
+            0.10: {3: 2.052, 4: 2.291, 5: 2.459, 6: 2.589, 7: 2.693, 8: 2.780, 9: 2.855, 10: 2.920}
+        }
+
+        if k in q_alpha_values.get(alpha, {}):
+            q_alpha = q_alpha_values[alpha][k]
+        else:
+            # Approximation for larger k
+            from scipy.stats import studentized_range
+            q_alpha = studentized_range.ppf(1 - alpha, k, np.inf) / np.sqrt(2)
+
+        critical_difference = q_alpha * np.sqrt(k * (k + 1) / (6 * n))
+
+        # Pairwise comparisons
         results = []
-        
-        # Pairwise comparisons using Wilcoxon signed-rank test
-        # (paired test since same datasets are used for all models)
-        for i, model1 in enumerate(models):
-            for j, model2 in enumerate(models):
+        models = list(pivot_df.columns)
+
+        for i, model_a in enumerate(models):
+            for j, model_b in enumerate(models):
                 if i >= j:
                     continue
-                
-                # Get paired data (same datasets)
-                data1 = []
-                data2 = []
-                
-                for dataset in combined_df['dataset'].unique():
-                    m1_data = combined_df[(combined_df['model'] == model1) & (combined_df['dataset'] == dataset)]
-                    m2_data = combined_df[(combined_df['model'] == model2) & (combined_df['dataset'] == dataset)]
-                    
-                    if len(m1_data) > 0 and len(m2_data) > 0:
-                        data1.append(m1_data[metric].values[0])
-                        data2.append(m2_data[metric].values[0])
-                
-                if len(data1) < 2:  # Need at least 2 datasets for test
-                    continue
-                
-                # Perform Wilcoxon signed-rank test
-                try:
-                    stat, p_value = wilcoxon(data1, data2)
-                except:
-                    p_value = 1.0
-                
-                mean1 = np.mean(data1)
-                mean2 = np.mean(data2)
-                
-                # Determine significance
-                if p_value < 0.001:
-                    sig = '***'
-                elif p_value < 0.01:
-                    sig = '**'
-                elif p_value < 0.05:
-                    sig = '*'
-                else:
-                    sig = 'ns'
-                
-                better_model = model1 if mean1 > mean2 else model2
-                
+
+                rank_diff = abs(avg_ranks[model_a] - avg_ranks[model_b])
+                is_significant = rank_diff > critical_difference
+
+                # Determine which model is better (lower rank is better)
+                better_model = model_a if avg_ranks[model_a] < avg_ranks[model_b] else model_b
+                mean_a = pivot_df[model_a].mean()
+                mean_b = pivot_df[model_b].mean()
+
                 results.append({
-                    'model_a': model1,
-                    'model_b': model2,
-                    'mean_a': mean1,
-                    'mean_b': mean2,
-                    'p_value': p_value,
-                    'significance': sig,
-                    'better_model': better_model,
-                    'n_datasets': len(data1)
+                    'model_a': model_a,
+                    'model_b': model_b,
+                    'avg_rank_a': avg_ranks[model_a],
+                    'avg_rank_b': avg_ranks[model_b],
+                    'rank_difference': rank_diff,
+                    'critical_difference': critical_difference,
+                    'significant': is_significant,
+                    'better_model': better_model if is_significant else 'ns',
+                    'mean_a': mean_a,
+                    'mean_b': mean_b,
+                    'mean_difference': abs(mean_a - mean_b)
                 })
-        
+
         df = pd.DataFrame(results)
-        
-        output_path = os.path.join(self.output_dir, f'{metric}_statistical_tests_aggregated.csv')
+
+        # Save results
+        output_path = os.path.join(self.output_dir, f'{metric}_nemenyi_post_hoc.csv')
         df.to_csv(output_path, index=False)
-        print(f"Statistical tests saved to: {output_path}")
-        
+
+        # Save average ranks
+        rank_summary = pd.DataFrame({
+            'model': avg_ranks.index,
+            'average_rank': avg_ranks.values,
+            'mean_performance': [pivot_df[model].mean() for model in avg_ranks.index]
+        }).sort_values('average_rank')
+
+        rank_path = os.path.join(self.output_dir, f'{metric}_average_ranks.csv')
+        rank_summary.to_csv(rank_path, index=False)
+
+        print(f"\nNemenyi Post-Hoc Test Results:")
+        print(f"  Critical Difference: {critical_difference:.4f}")
+        print(f"  Significant comparisons: {df['significant'].sum()} out of {len(df)}")
+        print(f"  Results saved to: {output_path}")
+        print(f"  Average ranks saved to: {rank_path}")
+
         return df
-    
-    def create_aggregated_significance_heatmap(self, df: pd.DataFrame, metric: str):
-        """Create heatmap of pairwise significance"""
+
+    def wilcoxon_post_hoc_bonferroni(self, metric: str = 'box_mAP@50', alpha: float = 0.05) -> pd.DataFrame:
+        """
+        Perform pairwise Wilcoxon signed-rank tests with Bonferroni correction.
+
+        This is more conservative than Nemenyi but provides exact p-values for each comparison.
+        """
+        combined_df = self.load_all_results()
+
+        if len(combined_df) == 0:
+            return pd.DataFrame()
+
+        # Prepare data
+        pivot_df = combined_df.pivot(index='dataset', columns='model', values=metric)
+        pivot_df = pivot_df.dropna()
+
+        models = list(pivot_df.columns)
+        n_comparisons = len(list(combinations(models, 2)))
+        bonferroni_alpha = alpha / n_comparisons
+
+        results = []
+
+        for model_a, model_b in combinations(models, 2):
+            data_a = pivot_df[model_a].values
+            data_b = pivot_df[model_b].values
+
+            # Wilcoxon signed-rank test
+            try:
+                statistic, p_value = wilcoxon(data_a, data_b, alternative='two-sided')
+            except Exception as e:
+                print(f"Warning: Wilcoxon test failed for {model_a} vs {model_b}: {e}")
+                p_value = 1.0
+                statistic = 0
+
+            # Effect size: rank-biserial correlation
+            n = len(data_a)
+            r = 1 - (2 * statistic) / (n * (n + 1))
+
+            # Cohen's d
+            mean_diff = np.mean(data_a - data_b)
+            std_diff = np.std(data_a - data_b, ddof=1)
+            cohens_d = mean_diff / std_diff if std_diff > 0 else 0
+
+            is_significant = p_value < bonferroni_alpha
+            better_model = model_a if np.mean(data_a) > np.mean(data_b) else model_b
+
+            results.append({
+                'model_a': model_a,
+                'model_b': model_b,
+                'mean_a': np.mean(data_a),
+                'mean_b': np.mean(data_b),
+                'mean_difference': mean_diff,
+                'p_value': p_value,
+                'p_value_bonferroni': p_value * n_comparisons,  # adjusted p-value
+                'bonferroni_alpha': bonferroni_alpha,
+                'significant': is_significant,
+                'cohens_d': cohens_d,
+                'rank_biserial_r': r,
+                'better_model': better_model if is_significant else 'ns'
+            })
+
+        df = pd.DataFrame(results)
+
+        # Add significance symbols
+        df['significance'] = df['p_value_bonferroni'].apply(
+            lambda p: '***' if p < 0.001 else '**' if p < 0.01 else '*' if p < 0.05 else 'ns'
+        )
+
+        # Save results
+        output_path = os.path.join(self.output_dir, f'{metric}_wilcoxon_bonferroni.csv')
+        df.to_csv(output_path, index=False)
+
+        print(f"\nWilcoxon Signed-Rank Test (Bonferroni corrected):")
+        print(f"  Number of comparisons: {n_comparisons}")
+        print(f"  Bonferroni-corrected alpha: {bonferroni_alpha:.4f}")
+        print(f"  Significant comparisons: {df['significant'].sum()} out of {len(df)}")
+        print(f"  Results saved to: {output_path}")
+
+        return df
+
+    def compute_effect_sizes(self, metric: str = 'box_mAP@50') -> pd.DataFrame:
+        """
+        Compute various effect size measures for all pairwise comparisons.
+        """
+        combined_df = self.load_all_results()
+
+        if len(combined_df) == 0:
+            return pd.DataFrame()
+
+        pivot_df = combined_df.pivot(index='dataset', columns='model', values=metric)
+        pivot_df = pivot_df.dropna()
+
+        models = list(pivot_df.columns)
+        results = []
+
+        for model_a, model_b in combinations(models, 2):
+            data_a = pivot_df[model_a].values
+            data_b = pivot_df[model_b].values
+
+            # Cohen's d
+            mean_diff = np.mean(data_a) - np.mean(data_b)
+            pooled_std = np.sqrt((np.var(data_a, ddof=1) + np.var(data_b, ddof=1)) / 2)
+            cohens_d = mean_diff / pooled_std if pooled_std > 0 else 0
+
+            # Hedge's g (corrected for small sample size)
+            n = len(data_a)
+            correction = (n - 3) / (n - 2.25) * np.sqrt((n - 2) / n)
+            hedges_g = cohens_d * correction
+
+            # Probability of superiority (common language effect size)
+            superior_count = sum([a > b for a, b in zip(data_a, data_b)])
+            prob_superiority = superior_count / n
+
+            # Interpret effect size
+            def interpret_d(d):
+                abs_d = abs(d)
+                if abs_d < 0.2:
+                    return 'negligible'
+                elif abs_d < 0.5:
+                    return 'small'
+                elif abs_d < 0.8:
+                    return 'medium'
+                else:
+                    return 'large'
+
+            results.append({
+                'model_a': model_a,
+                'model_b': model_b,
+                'mean_a': np.mean(data_a),
+                'mean_b': np.mean(data_b),
+                'mean_difference': mean_diff,
+                'cohens_d': cohens_d,
+                'hedges_g': hedges_g,
+                'effect_size_interpretation': interpret_d(cohens_d),
+                'probability_superiority': prob_superiority,
+                'better_model': model_a if mean_diff > 0 else model_b
+            })
+
+        df = pd.DataFrame(results)
+
+        output_path = os.path.join(self.output_dir, f'{metric}_effect_sizes.csv')
+        df.to_csv(output_path, index=False)
+        print(f"\nEffect sizes saved to: {output_path}")
+
+        return df
+
+    def create_critical_difference_diagram(self, metric: str = 'box_mAP@50', alpha: float = 0.05):
+        """
+        Create a Critical Difference (CD) diagram showing which models are significantly different.
+
+        Models connected by a horizontal line are NOT significantly different.
+        """
+        combined_df = self.load_all_results()
+
+        if len(combined_df) == 0:
+            return
+
+        # Get average ranks
+        pivot_df = combined_df.pivot(index='dataset', columns='model', values=metric)
+        pivot_df = pivot_df.dropna()
+
+        rank_df = pivot_df.rank(axis=1, ascending=False)
+        avg_ranks = rank_df.mean(axis=0).sort_values()
+
+        # Get Nemenyi results
+        nemenyi_df = self.nemenyi_post_hoc(metric=metric, alpha=alpha)
+
+        if len(nemenyi_df) == 0:
+            return
+
+        critical_difference = nemenyi_df['critical_difference'].iloc[0]
+
+        # Create the diagram
+        fig, ax = plt.subplots(figsize=(14, 8))
+
+        models = avg_ranks.index.tolist()
+        ranks = avg_ranks.values
+        n_models = len(models)
+
+        # Plot models
+        y_positions = np.arange(n_models)
+        ax.barh(y_positions, ranks, color='steelblue', alpha=0.7, edgecolor='black')
+
+        # Add rank values
+        for i, (model, rank) in enumerate(zip(models, ranks)):
+            ax.text(rank + 0.1, i, f'{rank:.2f}', va='center', fontweight='bold')
+
+        ax.set_yticks(y_positions)
+        ax.set_yticklabels([m.upper() for m in models], fontsize=11)
+        ax.set_xlabel('Average Rank', fontsize=12, fontweight='bold')
+        ax.set_title(f'Critical Difference Diagram - {metric}\n(CD = {critical_difference:.3f})', fontsize=14, fontweight='bold')
+
+        # Draw lines connecting non-significant groups
+        # Find groups of models that are not significantly different
+        groups = []
+        for i in range(n_models):
+            group = [i]
+            for j in range(i + 1, n_models):
+                if abs(ranks[j] - ranks[i]) <= critical_difference:
+                    group.append(j)
+                else:
+                    break
+            if len(group) > 1:
+                groups.append(group)
+
+        # Draw connecting lines for non-significant groups
+        offset = -0.3
+        for group_idx, group in enumerate(groups):
+            if len(group) > 1:
+                y_min = min(group)
+                y_max = max(group)
+                x_pos = max(ranks[group]) + 0.5 + offset * group_idx
+
+                # Draw line
+                ax.plot([x_pos, x_pos], [y_min, y_max], color='red', linewidth=3, alpha=0.6)
+
+                # Add horizontal bars at ends
+                bar_length = 0.15
+                ax.plot([x_pos - bar_length, x_pos + bar_length], [y_min, y_min], color='red', linewidth=3, alpha=0.6)
+                ax.plot([x_pos - bar_length, x_pos + bar_length], [y_max, y_max], color='red', linewidth=3, alpha=0.6)
+
+        ax.grid(axis='x', alpha=0.3, linestyle='--')
+        ax.set_xlim(0, max(ranks) + 2)
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(self.output_dir, f'{metric}_critical_difference_diagram.png'),
+                    dpi=300, bbox_inches='tight')
+        plt.close()
+
+        print(f"Critical difference diagram saved to: {self.output_dir}")
+
+    def create_aggregated_significance_heatmap(self, metric: str = 'box_mAP@50'):
+        """
+        Create comprehensive significance heatmap using Wilcoxon + Bonferroni results.
+        """
+        df = self.wilcoxon_post_hoc_bonferroni(metric=metric)
+
         if len(df) == 0:
             return
-        
-        models = list(set(df['model_a'].unique()) | set(df['model_b'].unique()))
-        models.sort()
-        
-        # Create matrix for p-values
+
+        models = sorted(list(set(df['model_a'].unique()) | set(df['model_b'].unique())))
+
+        # Create matrix for p-values and performance differences
         p_matrix = np.ones((len(models), len(models)))
-        
+        perf_matrix = np.zeros((len(models), len(models)))
+
         for _, row in df.iterrows():
             i = models.index(row['model_a'])
             j = models.index(row['model_b'])
-            p_matrix[i, j] = row['p_value']
-            p_matrix[j, i] = row['p_value']
-        
-        # Apply significance thresholds for visualization
-        sig_matrix = np.zeros_like(p_matrix)
-        sig_matrix[p_matrix < 0.05] = 1
-        sig_matrix[p_matrix < 0.01] = 2
-        sig_matrix[p_matrix < 0.001] = 3
-        
-        plt.figure(figsize=(10, 8))
-        sns.heatmap(sig_matrix, annot=p_matrix, fmt='.3f',
-                   cmap='RdYlGn_r', cbar_kws={'label': 'Significance Level'},
-                   xticklabels=[m.upper() for m in models],
-                   yticklabels=[m.upper() for m in models])
-        
-        plt.title(f'Statistical Significance of Pairwise Comparisons\n({metric}, aggregated across datasets)',
-                 fontsize=14, fontweight='bold')
+            p_matrix[i, j] = row['p_value_bonferroni']
+            p_matrix[j, i] = row['p_value_bonferroni']
+            perf_matrix[i, j] = row['mean_a'] - row['mean_b']
+            perf_matrix[j, i] = row['mean_b'] - row['mean_a']
+
+        # Create annotation matrix combining p-values and significance
+        annot_matrix = np.empty((len(models), len(models)), dtype=object)
+        for i in range(len(models)):
+            for j in range(len(models)):
+                if i == j:
+                    annot_matrix[i, j] = '—'
+                else:
+                    p = p_matrix[i, j]
+                    if p < 0.001:
+                        sig = '***'
+                    elif p < 0.01:
+                        sig = '**'
+                    elif p < 0.05:
+                        sig = '*'
+                    else:
+                        sig = 'ns'
+                    annot_matrix[i, j] = f'{p:.3f}\n{sig}'
+
+        # Plot
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 7))
+
+        # Heatmap 1: P-values
+        sns.heatmap(p_matrix, annot=annot_matrix, fmt='',
+                    cmap='RdYlGn', vmin=0, vmax=0.1,
+                    xticklabels=[m.upper() for m in models],
+                    yticklabels=[m.upper() for m in models],
+                    cbar_kws={'label': 'Adjusted p-value (Bonferroni)'},
+                    ax=ax1, linewidths=0.5, linecolor='gray')
+        ax1.set_title('Statistical Significance (Bonferroni-corrected)\n*** p<0.001, ** p<0.01, * p<0.05', fontsize=12, fontweight='bold')
+
+        # Heatmap 2: Performance differences
+        sns.heatmap(perf_matrix, annot=True, fmt='.3f',
+                    cmap='RdBu_r', center=0,
+                    xticklabels=[m.upper() for m in models],
+                    yticklabels=[m.upper() for m in models],
+                    cbar_kws={'label': f'{metric} Difference (Row - Column)'},
+                    ax=ax2, linewidths=0.5, linecolor='gray')
+        ax2.set_title(f'Performance Differences\n(Positive = Row model better)', fontsize=12, fontweight='bold')
+
+        plt.suptitle(f'Comprehensive Statistical Comparison - {metric}', fontsize=14, fontweight='bold', y=1.02)
         plt.tight_layout()
-        plt.savefig(os.path.join(self.output_dir, f'{metric}_significance_heatmap_aggregated.png'), dpi=300)
+        plt.savefig(os.path.join(self.output_dir, f'{metric}_significance_heatmap_comprehensive.png'), dpi=300, bbox_inches='tight')
         plt.close()
+
+        print(f"Comprehensive significance heatmap saved to: {self.output_dir}")
+
+    def generate_comprehensive_report(self, metrics: List[str] = None):
+        """
+        Generate a comprehensive statistical analysis report for all metrics.
+        """
+        if metrics is None:
+            metrics = ['box_mAP@50', 'box_mAP@50-95', 'box_mean_f1',
+                       'box_mean_precision', 'box_mean_recall']
+
+        report_path = os.path.join(self.output_dir, 'comprehensive_statistical_report.txt')
+
+        with open(report_path, 'w') as f:
+            f.write("=" * 80 + "\n")
+            f.write("COMPREHENSIVE STATISTICAL ANALYSIS REPORT\n")
+            f.write("=" * 80 + "\n\n")
+
+            combined_df = self.load_all_results()
+
+            if len(combined_df) == 0:
+                f.write("No data available for analysis.\n")
+                return
+
+            f.write(f"Number of datasets: {combined_df['dataset'].nunique()}\n")
+            f.write(f"Datasets: {', '.join(combined_df['dataset'].unique())}\n")
+            f.write(f"Number of models: {combined_df['model'].nunique()}\n")
+            f.write(f"Models: {', '.join(combined_df['model'].unique())}\n\n")
+
+            for metric in metrics:
+                if metric not in combined_df.columns:
+                    continue
+
+                f.write("\n" + "=" * 80 + "\n")
+                f.write(f"METRIC: {metric}\n")
+                f.write("=" * 80 + "\n\n")
+
+                # Descriptive statistics
+                f.write("1. DESCRIPTIVE STATISTICS\n")
+                f.write("-" * 40 + "\n")
+
+                pivot_df = combined_df.pivot(index='dataset', columns='model', values=metric)
+                pivot_df = pivot_df.dropna()
+
+                for model in pivot_df.columns:
+                    data = pivot_df[model].values
+                    f.write(f"\n{model.upper()}:\n")
+                    f.write(f"  Mean: {np.mean(data):.4f}\n")
+                    f.write(f"  Median: {np.median(data):.4f}\n")
+                    f.write(f"  Std Dev: {np.std(data, ddof=1):.4f}\n")
+                    f.write(f"  Min: {np.min(data):.4f}\n")
+                    f.write(f"  Max: {np.max(data):.4f}\n")
+
+                # Friedman test
+                f.write("\n\n2. FRIEDMAN TEST\n")
+                f.write("-" * 40 + "\n")
+                friedman_result = self.friedman_test(metric=metric)
+
+                if friedman_result:
+                    f.write(f"Test Statistic: {friedman_result['statistic']:.4f}\n")
+                    f.write(f"P-value: {friedman_result['p_value']:.4e}\n")
+                    f.write(f"Kendall's W (effect size): {friedman_result['kendalls_w']:.4f}\n")
+                    f.write(f"Conclusion: {'Significant differences exist (p < 0.05)' if friedman_result['significant'] else 'No significant differences (p ≥ 0.05)'}\n")
+
+                    if friedman_result['significant']:
+                        f.write("\nInterpretation:\n")
+                        f.write("There are statistically significant differences in performance between\n")
+                        f.write("the models across the datasets. Proceed with post-hoc tests to identify\n")
+                        f.write("which specific models differ from each other.\n")
+
+                # Post-hoc tests (only if Friedman is significant)
+                if friedman_result.get('significant', False):
+                    f.write("\n\n3. POST-HOC TESTS\n")
+                    f.write("-" * 40 + "\n")
+
+                    # Nemenyi
+                    nemenyi_df = self.nemenyi_post_hoc(metric=metric)
+                    sig_pairs = nemenyi_df[nemenyi_df['significant']]
+                    f.write(f"\nNemenyi Test Results:\n")
+                    f.write(f"  Significant pairs: {len(sig_pairs)} out of {len(nemenyi_df)}\n")
+
+                    if len(sig_pairs) > 0:
+                        f.write("\nSignificant differences found between:\n")
+                        for _, row in sig_pairs.iterrows():
+                            f.write(f"  {row['model_a'].upper()} vs {row['model_b'].upper()}: ")
+                            f.write(f"{row['better_model'].upper()} is better ")
+                            f.write(f"(rank diff = {row['rank_difference']:.3f})\n")
+
+                    # Wilcoxon with Bonferroni
+                    wilcoxon_df = self.wilcoxon_post_hoc_bonferroni(metric=metric)
+                    sig_pairs_w = wilcoxon_df[wilcoxon_df['significant']]
+                    f.write(f"\n\nWilcoxon Test (Bonferroni-corrected) Results:\n")
+                    f.write(f"  Significant pairs: {len(sig_pairs_w)} out of {len(wilcoxon_df)}\n")
+
+                    if len(sig_pairs_w) > 0:
+                        f.write("\nSignificant differences found between:\n")
+                        for _, row in sig_pairs_w.iterrows():
+                            f.write(f"  {row['model_a'].upper()} vs {row['model_b'].upper()}: ")
+                            f.write(f"{row['better_model'].upper()} is better ")
+                            f.write(f"(p = {row['p_value_bonferroni']:.4e}, ")
+                            f.write(f"d = {row['cohens_d']:.3f})\n")
+
+                # Effect sizes
+                f.write("\n\n4. EFFECT SIZES\n")
+                f.write("-" * 40 + "\n")
+                effect_df = self.compute_effect_sizes(metric=metric)
+
+                # Show largest effects
+                effect_sorted = effect_df.sort_values('cohens_d', key=abs, ascending=False).head(5)
+                f.write("\nTop 5 largest effect sizes:\n")
+                for _, row in effect_sorted.iterrows():
+                    f.write(f"  {row['model_a'].upper()} vs {row['model_b'].upper()}: ")
+                    f.write(f"Cohen's d = {row['cohens_d']:.3f} ({row['effect_size_interpretation']})\n")
+
+                f.write("\n")
+
+        print(f"\n{'=' * 80}")
+        print(f"Comprehensive report saved to: {report_path}")
+        print(f"{'=' * 80}\n")
+
+    def run_complete_analysis(self, metrics: List[str] = None):
+        """
+        Run the complete statistical analysis pipeline.
+        """
+        if metrics is None:
+            metrics = ['box_mAP@50', 'box_mAP@50-95', 'box_mean_f1']
+
+        print("\n" + "=" * 80)
+        print("RUNNING COMPREHENSIVE STATISTICAL ANALYSIS")
+        print("=" * 80)
+
+        for metric in metrics:
+            print(f"\n{'=' * 80}")
+            print(f"ANALYZING METRIC: {metric}")
+            print(f"{'=' * 80}")
+
+            # 1. Confidence intervals
+            print("\n[1/6] Computing confidence intervals...")
+            ci_df = self.compute_aggregated_confidence_intervals(metric=metric)
+            self.plot_aggregated_confidence_intervals(ci_df, metric=metric)
+
+            # 2. Friedman test
+            print("\n[2/6] Performing Friedman test...")
+            friedman_result = self.friedman_test(metric=metric)
+
+            if friedman_result.get('significant', False):
+                # 3. Nemenyi post-hoc
+                print("\n[3/6] Performing Nemenyi post-hoc test...")
+                self.nemenyi_post_hoc(metric=metric)
+
+                # 4. Wilcoxon post-hoc
+                print("\n[4/6] Performing Wilcoxon post-hoc test with Bonferroni correction...")
+                self.wilcoxon_post_hoc_bonferroni(metric=metric)
+
+                # 5. Critical difference diagram
+                print("\n[5/6] Creating critical difference diagram...")
+                self.create_critical_difference_diagram(metric=metric)
+
+                # 6. Comprehensive heatmap
+                print("\n[6/6] Creating comprehensive significance heatmap...")
+                self.create_aggregated_significance_heatmap(metric=metric)
+            else:
+                print("\n  ⚠ Friedman test not significant - skipping post-hoc tests")
+                print("  No significant differences found between models for this metric.")
+
+        # Generate final report
+        print("\n" + "=" * 80)
+        print("GENERATING COMPREHENSIVE REPORT")
+        print("=" * 80)
+        self.generate_comprehensive_report(metrics=metrics)
+
+        print("\n" + "=" * 80)
+        print("✓ COMPLETE STATISTICAL ANALYSIS FINISHED!")
+        print(f"  All results saved to: {self.output_dir}")
+        print("=" * 80 + "\n")
 
 
 class AggregatedFailureModeAnalyzer:
@@ -743,98 +1282,3 @@ class AggregatedFailureModeAnalyzer:
         plt.close()
         
         print(f"Aggregated failure mode plots saved to: {self.output_dir}")
-
-
-def generate_aggregated_report(size_df: pd.DataFrame,
-                              stat_df_ci: pd.DataFrame,
-                              stat_df_tests: pd.DataFrame,
-                              failure_df: pd.DataFrame,
-                              ensemble_df: Optional[pd.DataFrame],
-                              datasets: List[str],
-                              output_path: str):
-    """
-    Generate a comprehensive markdown report for aggregated analysis
-    """
-    with open(output_path, 'w') as f:
-        f.write("# Comprehensive Aggregated Analysis Report\n\n")
-        f.write(f"**Datasets Analyzed:** {', '.join(datasets)}\n")
-        f.write(f"**Total Datasets:** {len(datasets)}\n\n")
-        
-        f.write("## 1. Aggregated Object Size Category Analysis\n\n")
-        
-        if size_df is not None and len(size_df) > 0:
-            # Aggregate across datasets
-            agg_size = size_df.groupby(['model', 'size_category']).agg({
-                'tp': 'sum', 'fp': 'sum', 'fn': 'sum'
-            }).reset_index()
-            
-            agg_size['precision'] = agg_size.apply(
-                lambda row: row['tp'] / (row['tp'] + row['fp']) if (row['tp'] + row['fp']) > 0 else 0,
-                axis=1
-            )
-            agg_size['recall'] = agg_size.apply(
-                lambda row: row['tp'] / (row['tp'] + row['fn']) if (row['tp'] + row['fn']) > 0 else 0,
-                axis=1
-            )
-            agg_size['f1'] = agg_size.apply(
-                lambda row: 2 * row['precision'] * row['recall'] / (row['precision'] + row['recall'])
-                if (row['precision'] + row['recall']) > 0 else 0,
-                axis=1
-            )
-            
-            f.write("### Best Models by Size Category (Aggregated)\n\n")
-            for cat in ['tiny', 'small', 'medium', 'large']:
-                cat_data = agg_size[agg_size['size_category'] == cat].nlargest(3, 'f1')
-                f.write(f"**{cat.capitalize()} objects:**\n")
-                for _, row in cat_data.iterrows():
-                    f.write(f"- {row['model'].upper()}: F1={row['f1']:.3f}, ")
-                    f.write(f"Precision={row['precision']:.3f}, Recall={row['recall']:.3f}\n")
-                f.write("\n")
-        
-        f.write("## 2. Aggregated Statistical Significance Analysis\n\n")
-        
-        if stat_df_tests is not None and len(stat_df_tests) > 0:
-            sig_tests = stat_df_tests[stat_df_tests['significance'] != 'ns']
-            f.write(f"Found {len(sig_tests)} statistically significant differences (p < 0.05)\n\n")
-            
-            if len(sig_tests) > 0:
-                f.write("### Significant Pairwise Comparisons\n\n")
-                for _, row in sig_tests.iterrows():
-                    f.write(f"- **{row['model_a'].upper()} vs {row['model_b'].upper()}**: ")
-                    f.write(f"p={row['p_value']:.4f} {row['significance']}, ")
-                    f.write(f"{row['better_model'].upper()} performs better ")
-                    f.write(f"(across {row['n_datasets']:.0f} datasets)\n")
-        
-        f.write("\n## 3. Aggregated Failure Mode Analysis\n\n")
-        
-        if failure_df is not None and len(failure_df) > 0:
-            # Aggregate across datasets
-            failure_cols = [col for col in failure_df.columns
-                           if col not in ['dataset', 'model'] and not col.endswith('_pct')]
-            
-            agg_failure = failure_df.groupby('model')[failure_cols].sum().reset_index()
-            agg_failure['total_failures'] = agg_failure[failure_cols].sum(axis=1)
-            
-            f.write("### Total Failures by Model (Aggregated)\n\n")
-            f.write(agg_failure[['model', 'total_failures']].sort_values('total_failures').to_markdown(index=False))
-            f.write("\n\n")
-            
-            f.write("### Failure Mode Distribution\n\n")
-            for col in failure_cols:
-                if col in agg_failure.columns:
-                    f.write(f"\n**{col.replace('_', ' ').title()}:**\n")
-                    top_models = agg_failure.nlargest(3, col)[['model', col]]
-                    for _, row in top_models.iterrows():
-                        f.write(f"- {row['model'].upper()}: {row[col]:.0f}\n")
-        
-        if ensemble_df is not None and len(ensemble_df) > 0:
-            f.write("\n## 4. Ensemble Methods (Aggregated)\n\n")
-            f.write("### Best Ensemble Methods\n\n")
-            best_ensembles = ensemble_df.nlargest(3, 'f1')
-            for _, row in best_ensembles.iterrows():
-                f.write(f"- **{row['ensemble_method']}**: ")
-                f.write(f"F1={row['f1']:.3f}, ")
-                f.write(f"Precision={row['precision']:.3f}, ")
-                f.write(f"Recall={row['recall']:.3f}\n")
-    
-    print(f"\nAggregated report saved to: {output_path}")

@@ -457,7 +457,8 @@ def run_tsbp_pipeline(model_name, data_root, results_inf_all_root,
     )
 
 
-if __name__ == "__main__":
+
+def main_one_model():
     # Example usage
     from constants import results_inf_all_root, data_root, MODEL
 
@@ -469,5 +470,25 @@ if __name__ == "__main__":
         fp_threshold=0.30, # discarded, between are candidates?
         start_tp_num=25,
         start_fp_num=25,
-        use_histogram=True  # Set to True for cell detection tasks
+        use_histogram=False  # Set to True for cell detection tasks
     )
+
+def main_all_models():
+    # Example usage
+    from constants import results_inf_all_root, data_root, ALL_MODELS
+
+    for MODEL in ALL_MODELS:
+        run_tsbp_pipeline(
+            model_name=MODEL,
+            data_root=data_root,
+            results_inf_all_root=results_inf_all_root,
+            tp_threshold=0.50, # accepted
+            fp_threshold=0.30, # discarded, between are candidates?
+            start_tp_num=25,
+            start_fp_num=25,
+            use_histogram=False  # Set to True for cell detection tasks
+        )
+
+if __name__ == "__main__":
+    # main_one_model()
+    main_all_models()

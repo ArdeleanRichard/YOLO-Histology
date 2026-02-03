@@ -332,30 +332,30 @@ class DetectionEvaluator:
 
         return np.array(precisions), np.array(recalls), np.array(scores)
 
-    def compute_ap(self, precisions, recalls):
-        """
-        Compute Average Precision using 101-point interpolation (COCO style).
-        """
-        # Add sentinel values
-        recalls = np.concatenate(([0.0], recalls, [1.0]))
-        precisions = np.concatenate(([0.0], precisions, [0.0]))
-
-        # Compute the precision envelope
-        for i in range(len(precisions) - 1, 0, -1):
-            precisions[i - 1] = max(precisions[i - 1], precisions[i])
-
-        # Integrate using 101-point interpolation
-        recall_thresholds = np.linspace(0, 1, 101)
-        ap = 0.0
-
-        for r_thresh in recall_thresholds:
-            # Find precisions where recall >= r_thresh
-            precs = precisions[recalls >= r_thresh]
-            ap += precs[0] if len(precs) > 0 else 0.0
-
-        ap /= 101
-
-        return ap
+    # def compute_ap(self, precisions, recalls):
+    #     """
+    #     Compute Average Precision using 101-point interpolation (COCO style).
+    #     """
+    #     # Add sentinel values
+    #     recalls = np.concatenate(([0.0], recalls, [1.0]))
+    #     precisions = np.concatenate(([0.0], precisions, [0.0]))
+    #
+    #     # Compute the precision envelope
+    #     for i in range(len(precisions) - 1, 0, -1):
+    #         precisions[i - 1] = max(precisions[i - 1], precisions[i])
+    #
+    #     # Integrate using 101-point interpolation
+    #     recall_thresholds = np.linspace(0, 1, 101)
+    #     ap = 0.0
+    #
+    #     for r_thresh in recall_thresholds:
+    #         # Find precisions where recall >= r_thresh
+    #         precs = precisions[recalls >= r_thresh]
+    #         ap += precs[0] if len(precs) > 0 else 0.0
+    #
+    #     ap /= 101
+    #
+    #     return ap
 
     def evaluate(self, labels_gt, predictions, iou_thresholds=None):
         """
@@ -400,7 +400,7 @@ class DetectionEvaluator:
             # Compute precision-recall curve
             if total_gt == 0:
                 results[iou_thresh] = {
-                    'ap': 0.0,
+                    # 'ap': 0.0,
                     'precision': 0.0,
                     'recall': 0.0,
                     'f1': 0.0,
@@ -414,8 +414,8 @@ class DetectionEvaluator:
 
             precisions, recalls, scores = self.compute_precision_recall_curve(tp_all, fp_all, total_gt)
 
-            # Compute AP
-            ap = self.compute_ap(precisions, recalls)
+            # # Compute AP
+            # ap = self.compute_ap(precisions, recalls)
 
             # Compute metrics directly from actual TP/FP/FN counts
             # This is correct for fixed threshold evaluation
@@ -428,7 +428,7 @@ class DetectionEvaluator:
             actual_f1 = 2 * (actual_precision * actual_recall) / (actual_precision + actual_recall) if (actual_precision + actual_recall) > 0 else 0.0
 
             results[iou_thresh] = {
-                'ap': ap,
+                # 'ap': ap,
                 'precision': actual_precision,
                 'recall': actual_recall,
                 'f1': actual_f1,
@@ -453,19 +453,19 @@ class DetectionEvaluator:
         """
         # mAP@0.5
         results_50 = self.evaluate(labels, predictions, iou_thresholds=[0.5])
-        map50 = results_50[0.5]['ap']
-
-        # mAP@0.5:0.95 (10 IoU thresholds)
-        iou_thresholds = np.linspace(0.5, 0.95, 10)
-        results_range = self.evaluate(labels, predictions, iou_thresholds=iou_thresholds)
-
-        aps = [results_range[thresh]['ap'] for thresh in iou_thresholds]
-        map50_95 = np.mean(aps)
+        # map50 = results_50[0.5]['ap']
+        #
+        # # mAP@0.5:0.95 (10 IoU thresholds)
+        # iou_thresholds = np.linspace(0.5, 0.95, 10)
+        # results_range = self.evaluate(labels, predictions, iou_thresholds=iou_thresholds)
+        #
+        # aps = [results_range[thresh]['ap'] for thresh in iou_thresholds]
+        # map50_95 = np.mean(aps)
 
         # Use metrics from IoU=0.5 for precision, recall, F1
         metrics = {
-            'map50': map50,
-            'map50_95': map50_95,
+            # 'map50': map50,
+            # 'map50_95': map50_95,
             'precision': results_50[0.5]['precision'],
             'recall': results_50[0.5]['recall'],
             'f1': results_50[0.5]['f1'],
@@ -539,20 +539,12 @@ def compare_methods(label_dir, pred_dirs, method_names, output_dir=None):
         results_list.append(metrics)
         detailed_results[method_name] = detailed
 
-        # # Print results
-        # print(f"\n{method_name} Results:")
-        # print(f"  mAP@0.5:      {metrics['map50']:.4f}")
-        # print(f"  mAP@0.5:0.95: {metrics['map50_95']:.4f}")
-        # print(f"  Precision:    {metrics['precision']:.4f}")
-        # print(f"  Recall:       {metrics['recall']:.4f}")
-        # print(f"  F1:           {metrics['f1']:.4f}")
-        # print(f"  TP: {metrics['tp']}, FP: {metrics['fp']}, FN: {metrics['fn']}")
-
     # Create comparison DataFrame
     df = pd.DataFrame(results_list)
 
     # Reorder columns
-    cols = ['method', 'map50', 'map50_95', 'f1', 'precision', 'recall', 'tp', 'fp', 'fn', 'total_gt', 'total_pred']
+    # cols = ['method', 'map50', 'map50_95', 'f1', 'precision', 'recall', 'tp', 'fp', 'fn', 'total_gt', 'total_pred']
+    cols = ['method', 'f1', 'precision', 'recall', 'tp', 'fp', 'fn', 'total_gt', 'total_pred']
     df = df[cols]
 
     # Print comparison table
@@ -562,13 +554,6 @@ def compare_methods(label_dir, pred_dirs, method_names, output_dir=None):
     print(df.to_string(index=False))
     print("=" * 80)
 
-    # Find best method for each metric
-    print("\nBest Methods:")
-    for metric in ['map50', 'map50_95', 'f1', 'precision', 'recall']:
-        best_idx = df[metric].idxmax()
-        best_method = df.loc[best_idx, 'method']
-        best_value = df.loc[best_idx, metric]
-        print(f"  {metric.upper()}: {best_method} ({best_value:.4f})")
 
     # Save results if output directory specified
     if output_dir:
@@ -634,8 +619,7 @@ def create_comparison_plots(df, detailed_results, output_dir):
 
     for method_name, details in detailed_results.items():
         if 'precisions' in details and 'recalls' in details:
-            plt.plot(details['recalls'], details['precisions'],
-                     marker='', linewidth=2, label=f"{method_name}")
+            plt.plot(details['recalls'], details['precisions'], marker='', linewidth=2, label=f"{method_name}")
 
     plt.xlabel('Recall', fontsize=12, fontweight='bold')
     plt.ylabel('Precision', fontsize=12, fontweight='bold')
@@ -712,6 +696,23 @@ def run_full_comparison(data_root, results_inf_all_root, model_name, thresholds=
         pred_dirs.append(tsbp_dir)
         method_names.append("TSBP")
 
+
+    tsbp_dir = f"{results_inf_all_root}/{model_name}/tsbp_adaptive/"
+    if os.path.exists(tsbp_dir) and os.listdir(tsbp_dir):
+        pred_dirs.append(tsbp_dir)
+        method_names.append("TSBP_A")
+
+    tsbp_dir = f"{results_inf_all_root}/{model_name}/tsbp_hierarchical/"
+    if os.path.exists(tsbp_dir) and os.listdir(tsbp_dir):
+        pred_dirs.append(tsbp_dir)
+        method_names.append("TSBP_H")
+
+    tsbp_dir = f"{results_inf_all_root}/{model_name}/tsbp_plusplus/"
+    if os.path.exists(tsbp_dir) and os.listdir(tsbp_dir):
+        pred_dirs.append(tsbp_dir)
+        method_names.append("TSBP_PP")
+
+
     # # 3. Similarity Propagation (if exists)
     # simprop = "simprop"
     # for simprop_type in ["_knn", "_density", "_voting"]:
@@ -737,6 +738,7 @@ def run_full_comparison(data_root, results_inf_all_root, model_name, thresholds=
     return df, detailed
 
 
+
 if __name__ == "__main__":
     """
     File Structure:
@@ -750,15 +752,28 @@ if __name__ == "__main__":
             {model_name} / similarity_prop /        # SimProp results
             {model_name} / comparison /             # Output comparison results
     """
-
-    from constants import results_inf_all_root, data_root, MODEL
-
     DEBUG = False
-    df, detailed = run_full_comparison(
-        data_root=data_root,
-        results_inf_all_root=results_inf_all_root,
-        model_name=MODEL,
-        thresholds=[0.00, 0.05, 0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6]  # Test multiple thresholds
-    )
 
-    print(f"Results saved to: {results_inf_all_root}/{MODEL}/comparison/")
+    # from constants import results_inf_all_root, data_root, MODEL
+    #
+    # df, detailed = run_full_comparison(
+    #     data_root=data_root,
+    #     results_inf_all_root=results_inf_all_root,
+    #     model_name=MODEL,
+    #     thresholds=[0.00, 0.05, 0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6]  # Test multiple thresholds
+    # )
+    #
+    # print(f"Results saved to: {results_inf_all_root}/{MODEL}/comparison/")
+
+
+    from constants import results_inf_all_root, data_root, ALL_MODELS
+
+    for MODEL in ALL_MODELS:
+        df, detailed = run_full_comparison(
+            data_root=data_root,
+            results_inf_all_root=results_inf_all_root,
+            model_name=MODEL,
+            thresholds=[0.00, 0.05, 0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6]  # Test multiple thresholds
+        )
+
+        print(f"Results saved to: {results_inf_all_root}/{MODEL}/comparison/")

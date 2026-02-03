@@ -1,15 +1,13 @@
 import numpy as np
 import pandas as pd
 import os
-import cv2
 from scipy import stats
 from scipy.stats import wilcoxon, friedmanchisquare
 import matplotlib.pyplot as plt
 import seaborn as sns
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
 from dataclasses import dataclass
 from collections import defaultdict
-import json
 
 
 @dataclass
@@ -824,78 +822,3 @@ class FailureModeAnalyzer:
             plt.close()
 
         print(f"Failure mode plots saved to: {self.output_dir}")
-
-
-def generate_analysis_report(size_df: pd.DataFrame,
-                            stat_df_ci: pd.DataFrame,
-                            stat_df_tests: pd.DataFrame,
-                            failure_df: pd.DataFrame,
-                            output_path: str):
-    """
-    Generate a comprehensive markdown report summarizing all analyses
-    """
-    with open(output_path, 'w') as f:
-        f.write("# Comprehensive Analysis Report\n\n")
-        f.write("## 1. Object Size Category Analysis\n\n")
-
-        f.write("### Summary Statistics\n\n")
-        f.write(size_df.groupby('size_category')[['precision', 'recall', 'f1']].agg(['mean', 'std']).to_markdown())
-        f.write("\n\n")
-
-        f.write("### Best Performing Models by Size Category\n\n")
-        for cat in size_df['size_category'].unique():
-            best = size_df[size_df['size_category'] == cat].nlargest(3, 'f1')
-            f.write(f"**{cat.capitalize()} objects:**\n")
-            for _, row in best.iterrows():
-                f.write(f"- {row['model'].upper()}: F1={row['f1']:.3f}\n")
-            f.write("\n")
-
-        f.write("## 2. Statistical Significance Analysis\n\n")
-
-        if 'significance' in stat_df_tests.columns:
-            sig_tests = stat_df_tests[stat_df_tests['significance'] != 'ns']
-            f.write(f"Found {len(sig_tests)} statistically significant differences (p < 0.05)\n\n")
-
-            if len(sig_tests) > 0:
-                f.write("### Significant Pairwise Comparisons\n\n")
-                model_col_a = 'model_a' if 'model_a' in sig_tests.columns else 'model1'
-                model_col_b = 'model_b' if 'model_b' in sig_tests.columns else 'model2'
-
-                for _, row in sig_tests.iterrows():
-                    f.write(f"- **{row[model_col_a].upper()} vs {row[model_col_b].upper()}**: ")
-                    f.write(f"p={row['p_value']:.4f} {row['significance']}, ")
-                    f.write(f"{row['better_model'].upper()} performs better\n")
-        else:
-            f.write(f"Performed {len(stat_df_tests)} pairwise comparisons\n\n")
-            if len(stat_df_tests) > 0:
-                f.write("### Top Performance Differences\n\n")
-                model_col_a = 'model_a' if 'model_a' in stat_df_tests.columns else 'model1'
-                model_col_b = 'model_b' if 'model_b' in stat_df_tests.columns else 'model2'
-
-                for _, row in stat_df_tests.head(5).iterrows():
-                    f.write(f"- **{row[model_col_a].upper()} vs {row[model_col_b].upper()}**: ")
-                    if 'absolute_diff' in row:
-                        f.write(f"Δ={row['absolute_diff']:.4f}, ")
-                    f.write(f"{row['better_model'].upper()} is better\n")
-
-        f.write("\n## 3. Failure Mode Analysis\n\n")
-
-        f.write("### Total Failures by Model\n\n")
-        failure_cols = [col for col in failure_df.columns
-                       if col not in ['model'] and not col.endswith('_pct')]
-
-        if len(failure_cols) > 0:
-            failure_df['total_failures'] = failure_df[failure_cols].sum(axis=1)
-            f.write(failure_df[['model', 'total_failures']].sort_values('total_failures').to_markdown(index=False))
-            f.write("\n\n")
-
-        f.write("### Most Common Failure Modes\n\n")
-        for col in failure_cols:
-            if col in failure_df.columns:
-                f.write(f"\n**{col.replace('_', ' ').title()}:**\n")
-                top_models = failure_df.nlargest(3, col)[['model', col]]
-                for _, row in top_models.iterrows():
-                    f.write(f"- {row['model'].upper()}: {row[col]:.0f}\n")
-
-    print(f"Comprehensive report saved to: {output_path}")
-

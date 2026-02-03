@@ -1,0 +1,318 @@
+================================================================================
+COMPREHENSIVE STATISTICAL ANALYSIS REPORT
+================================================================================
+
+Number of datasets: 5
+Datasets: BCNB, nuclei, TNBC, MoNuSAC, CryoNuSeg
+Number of models: 8
+Models: rtdetr, yolo8, yolo9, yolo10, yolo11, yolo12, yoloe, yolow
+
+
+================================================================================
+METRIC: box_mAP@50
+================================================================================
+
+1. DESCRIPTIVE STATISTICS
+----------------------------------------
+
+RTDETR:
+  Mean: 0.1708
+  Median: 0.1830
+  Std Dev: 0.1531
+  Min: 0.0000
+  Max: 0.3340
+
+YOLO10:
+  Mean: 0.5792
+  Median: 0.6750
+  Std Dev: 0.2544
+  Min: 0.2810
+  Max: 0.8880
+
+YOLO11:
+  Mean: 0.6298
+  Median: 0.7770
+  Std Dev: 0.2805
+  Min: 0.2660
+  Max: 0.9230
+
+YOLO12:
+  Mean: 0.6070
+  Median: 0.7210
+  Std Dev: 0.2893
+  Min: 0.2850
+  Max: 0.9300
+
+YOLO8:
+  Mean: 0.6076
+  Median: 0.7480
+  Std Dev: 0.2955
+  Min: 0.2310
+  Max: 0.9240
+
+YOLO9:
+  Mean: 0.6116
+  Median: 0.7440
+  Std Dev: 0.2799
+  Min: 0.2680
+  Max: 0.9300
+
+YOLOE:
+  Mean: 0.6304
+  Median: 0.7520
+  Std Dev: 0.2724
+  Min: 0.2430
+  Max: 0.9200
+
+YOLOW:
+  Mean: 0.6194
+  Median: 0.7540
+  Std Dev: 0.2739
+  Min: 0.2520
+  Max: 0.8990
+
+
+2. FRIEDMAN TEST
+----------------------------------------
+Test Statistic: 16.0263
+P-value: 2.4877e-02
+Kendall's W (effect size): 0.4579
+Conclusion: Significant differences exist (p < 0.05)
+
+Interpretation:
+There are statistically significant differences in performance between
+the models across the datasets. Proceed with post-hoc tests to identify
+which specific models differ from each other.
+
+
+3. POST-HOC TESTS
+----------------------------------------
+
+Nemenyi Test Results:
+  Significant pairs: 1 out of 28
+
+Significant differences found between:
+  RTDETR vs YOLO11: YOLO11 is better (rank diff = 5.100)
+
+
+Wilcoxon Test (Bonferroni-corrected) Results:
+  Significant pairs: 0 out of 28
+
+
+4. EFFECT SIZES
+----------------------------------------
+
+Top 5 largest effect sizes:
+  RTDETR vs YOLOE: Cohen's d = -2.080 (large)
+  RTDETR vs YOLO11: Cohen's d = -2.031 (large)
+  RTDETR vs YOLOW: Cohen's d = -2.022 (large)
+  RTDETR vs YOLO9: Cohen's d = -1.954 (large)
+  RTDETR vs YOLO10: Cohen's d = -1.945 (large)
+
+
+================================================================================
+METRIC: box_mAP@50-95
+================================================================================
+
+1. DESCRIPTIVE STATISTICS
+----------------------------------------
+
+RTDETR:
+  Mean: 0.0700
+  Median: 0.0690
+  Std Dev: 0.0721
+  Min: 0.0000
+  Max: 0.1820
+
+YOLO10:
+  Mean: 0.3816
+  Median: 0.4420
+  Std Dev: 0.1980
+  Min: 0.1510
+  Max: 0.6420
+
+YOLO11:
+  Mean: 0.4154
+  Median: 0.5060
+  Std Dev: 0.2151
+  Min: 0.1470
+  Max: 0.6720
+
+YOLO12:
+  Mean: 0.4000
+  Median: 0.4770
+  Std Dev: 0.2207
+  Min: 0.1550
+  Max: 0.6760
+
+YOLO8:
+  Mean: 0.3894
+  Median: 0.4690
+  Std Dev: 0.2145
+  Min: 0.1260
+  Max: 0.6500
+
+YOLO9:
+  Mean: 0.3764
+  Median: 0.4530
+  Std Dev: 0.1865
+  Min: 0.1430
+  Max: 0.5970
+
+YOLOE:
+  Mean: 0.3760
+  Median: 0.4230
+  Std Dev: 0.1819
+  Min: 0.1230
+  Max: 0.6010
+
+YOLOW:
+  Mean: 0.3898
+  Median: 0.4190
+  Std Dev: 0.1976
+  Min: 0.1410
+  Max: 0.6490
+
+
+2. FRIEDMAN TEST
+----------------------------------------
+Test Statistic: 18.2000
+P-value: 1.1100e-02
+Kendall's W (effect size): 0.5200
+Conclusion: Significant differences exist (p < 0.05)
+
+Interpretation:
+There are statistically significant differences in performance between
+the models across the datasets. Proceed with post-hoc tests to identify
+which specific models differ from each other.
+
+
+3. POST-HOC TESTS
+----------------------------------------
+
+Nemenyi Test Results:
+  Significant pairs: 2 out of 28
+
+Significant differences found between:
+  RTDETR vs YOLO11: YOLO11 is better (rank diff = 6.000)
+  RTDETR vs YOLO12: YOLO12 is better (rank diff = 5.000)
+
+
+Wilcoxon Test (Bonferroni-corrected) Results:
+  Significant pairs: 0 out of 28
+
+
+4. EFFECT SIZES
+----------------------------------------
+
+Top 5 largest effect sizes:
+  RTDETR vs YOLOE: Cohen's d = -2.212 (large)
+  RTDETR vs YOLO9: Cohen's d = -2.167 (large)
+  RTDETR vs YOLO11: Cohen's d = -2.153 (large)
+  RTDETR vs YOLOW: Cohen's d = -2.150 (large)
+  RTDETR vs YOLO10: Cohen's d = -2.091 (large)
+
+
+================================================================================
+METRIC: box_mean_f1
+================================================================================
+
+1. DESCRIPTIVE STATISTICS
+----------------------------------------
+
+RTDETR:
+  Mean: 0.1906
+  Median: 0.2300
+  Std Dev: 0.1550
+  Min: 0.0000
+  Max: 0.3880
+
+YOLO10:
+  Mean: 0.5348
+  Median: 0.6490
+  Std Dev: 0.2898
+  Min: 0.1170
+  Max: 0.8610
+
+YOLO11:
+  Mean: 0.6134
+  Median: 0.7250
+  Std Dev: 0.2662
+  Min: 0.2470
+  Max: 0.9000
+
+YOLO12:
+  Mean: 0.5856
+  Median: 0.6670
+  Std Dev: 0.2756
+  Min: 0.2260
+  Max: 0.9060
+
+YOLO8:
+  Mean: 0.5736
+  Median: 0.6940
+  Std Dev: 0.2906
+  Min: 0.2000
+  Max: 0.8950
+
+YOLO9:
+  Mean: 0.5706
+  Median: 0.7010
+  Std Dev: 0.2880
+  Min: 0.1660
+  Max: 0.8850
+
+YOLOE:
+  Mean: 0.6166
+  Median: 0.7140
+  Std Dev: 0.2484
+  Min: 0.2650
+  Max: 0.8990
+
+YOLOW:
+  Mean: 0.5816
+  Median: 0.7140
+  Std Dev: 0.2771
+  Min: 0.1910
+  Max: 0.8740
+
+
+2. FRIEDMAN TEST
+----------------------------------------
+Test Statistic: 20.4000
+P-value: 4.7675e-03
+Kendall's W (effect size): 0.5829
+Conclusion: Significant differences exist (p < 0.05)
+
+Interpretation:
+There are statistically significant differences in performance between
+the models across the datasets. Proceed with post-hoc tests to identify
+which specific models differ from each other.
+
+
+3. POST-HOC TESTS
+----------------------------------------
+
+Nemenyi Test Results:
+  Significant pairs: 3 out of 28
+
+Significant differences found between:
+  RTDETR vs YOLO11: YOLO11 is better (rank diff = 4.800)
+  YOLO10 vs YOLO11: YOLO11 is better (rank diff = 5.000)
+  YOLO10 vs YOLOE: YOLOE is better (rank diff = 4.800)
+
+
+Wilcoxon Test (Bonferroni-corrected) Results:
+  Significant pairs: 0 out of 28
+
+
+4. EFFECT SIZES
+----------------------------------------
+
+Top 5 largest effect sizes:
+  RTDETR vs YOLOE: Cohen's d = -2.057 (large)
+  RTDETR vs YOLO11: Cohen's d = -1.941 (large)
+  RTDETR vs YOLO12: Cohen's d = -1.766 (large)
+  RTDETR vs YOLOW: Cohen's d = -1.742 (large)
+  RTDETR vs YOLO8: Cohen's d = -1.645 (large)
+

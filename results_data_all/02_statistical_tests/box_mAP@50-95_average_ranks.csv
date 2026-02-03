@@ -1,0 +1,9 @@
+model,average_rank,mean_performance
+yolo11,2.0,0.4154
+yolo12,3.0,0.4
+yolo8,4.0,0.3894
+yolow,4.2,0.3898
+yolo10,4.6,0.3816
+yolo9,5.0,0.37639999999999996
+yoloe,5.2,0.376
+rtdetr,8.0,0.06999999999999999
