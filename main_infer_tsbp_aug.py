@@ -1726,5 +1726,5 @@ def main_all_models():
 
 
 if __name__ == "__main__":
-    main_one_model()
-    # main_all_models()
+    # main_one_model()
+    main_all_models()

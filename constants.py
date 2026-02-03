@@ -6,7 +6,7 @@ import os
 MODEL = "yoloe"
 
 # DATA OPTIONS: ["BCNB", "nuclei", "TNBC", "MoNuSAC", "CryoNuSeg"]
-DATA = "nuclei"
+DATA = "CryoNuSeg"
 
 ALL_MODELS = ["rtdetr", "yolo8", "yolo9", "yolo10", "yolo11", "yolo12", "yolow", "yoloe"]
 data_root = f"./data/{DATA}/"

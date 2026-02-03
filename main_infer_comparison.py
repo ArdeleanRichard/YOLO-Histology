@@ -576,7 +576,8 @@ def create_comparison_plots(df, detailed_results, output_dir):
     fig, axes = plt.subplots(2, 3, figsize=(15, 10))
     fig.suptitle('Method Comparison', fontsize=16, fontweight='bold')
 
-    metrics = ['map50', 'map50_95', 'f1', 'precision', 'recall']
+    # metrics = ['map50', 'map50_95', 'f1', 'precision', 'recall']
+    metrics = ['f1', 'precision', 'recall']
     colors = plt.cm.Set3(range(len(df)))
 
     for idx, metric in enumerate(metrics):
@@ -760,7 +761,8 @@ if __name__ == "__main__":
     #     data_root=data_root,
     #     results_inf_all_root=results_inf_all_root,
     #     model_name=MODEL,
-    #     thresholds=[0.00, 0.05, 0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6]  # Test multiple thresholds
+    #     # thresholds=[0.00, 0.05, 0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6]  # Test multiple thresholds
+    #     thresholds=[0.5],
     # )
     #
     # print(f"Results saved to: {results_inf_all_root}/{MODEL}/comparison/")
@@ -773,7 +775,8 @@ if __name__ == "__main__":
             data_root=data_root,
             results_inf_all_root=results_inf_all_root,
             model_name=MODEL,
-            thresholds=[0.00, 0.05, 0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6]  # Test multiple thresholds
+            # thresholds=[0.00, 0.05, 0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6]  # Test multiple thresholds
+            thresholds=[0.5],
         )
 
         print(f"Results saved to: {results_inf_all_root}/{MODEL}/comparison/")
