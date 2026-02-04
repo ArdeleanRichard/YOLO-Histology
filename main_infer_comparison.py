@@ -475,22 +475,22 @@ def compare_methods(label_dir, pred_dirs, method_names, output_dir=None):
     evaluator = DetectionEvaluator()
 
     # Load ground truth
-    print("Loading ground truth labels...")
+    # print("Loading ground truth labels...")
     labels = evaluator.load_labels_ground_truth(label_dir)
     total_gt = sum(len(v) for v in labels.values())
-    print(f"Loaded {len(labels)} images with {total_gt} ground truth boxes")
+    # print(f"Loaded {len(labels)} images with {total_gt} ground truth boxes")
 
     results_list = []
     detailed_results = {}
 
     for method_name, pred_dir in zip(method_names, pred_dirs):
-        print(f"\nEvaluating: {method_name}")
+        # print(f"\nEvaluating: {method_name}")
         # print(f"\t Prediction dir: {pred_dir}")
 
         # Load predictions
         predictions = evaluator.load_labels_predictions(pred_dir)
         total_pred = sum(len(v) for v in predictions.values())
-        print(f"Loaded {total_pred} predictions")
+        # print(f"Loaded {total_pred} predictions")
 
         # Compute metrics
         metrics, detailed = evaluator.compute_metrics(labels, predictions)
@@ -617,11 +617,11 @@ def run_full_comparison(data_root, results_inf_all_root, model_name, thresholds=
     output_dir = f"{results_inf_all_root}/{model_name}/comparison/"
 
     print("=" * 80)
-    print("FULL METHOD COMPARISON")
+    print("METHOD COMPARISON")
     print("=" * 80)
-    print(f"Model: {model_name}")
-    print(f"Ground truth: {label_dir}")
-    print(f"Predictions base: {base_pred_dir}")
+    print(f"\tModel: {model_name}")
+    print(f"\tGround truth: {label_dir}")
+    print(f"\tPredictions base: {base_pred_dir}")
     print("=" * 80)
 
     # Prepare prediction directories and method names
@@ -660,11 +660,6 @@ def run_full_comparison(data_root, results_inf_all_root, model_name, thresholds=
         pred_dirs.append(tsbp_dir)
         method_names.append("TSBP")
 
-    tsbp_dir = f"{results_inf_all_root}/{model_name}/tsbp_adaptive/"
-    if os.path.exists(tsbp_dir) and os.listdir(tsbp_dir):
-        pred_dirs.append(tsbp_dir)
-        method_names.append("TSBP_A")
-
     tsbp_dir = f"{results_inf_all_root}/{model_name}/tsbp_hierarchical/"
     if os.path.exists(tsbp_dir) and os.listdir(tsbp_dir):
         pred_dirs.append(tsbp_dir)
@@ -674,12 +669,6 @@ def run_full_comparison(data_root, results_inf_all_root, model_name, thresholds=
     if os.path.exists(tsbp_dir) and os.listdir(tsbp_dir):
         pred_dirs.append(tsbp_dir)
         method_names.append("TSBP_PP")
-
-    tsbp_dir = f"{results_inf_all_root}/{model_name}/tsbp_improved/"
-    if os.path.exists(tsbp_dir) and os.listdir(tsbp_dir):
-        pred_dirs.append(tsbp_dir)
-        method_names.append("TSBP_I")
-
 
     # Run comparison
     df, detailed = compare_methods(label_dir, pred_dirs, method_names, output_dir)
