@@ -1,138 +1,3 @@
-"""
-================================================================================
-IMPROVED TEST-TIME SELF-GUIDED BOUNDING-BOX PROPAGATION (TSBP)
-================================================================================
-
-Original Paper: https://arxiv.org/abs/2409.16678
-Original Code: https://github.com/jwhgdeu/TSBP
-
-This implementation presents three novel extensions to the original TSBP method:
-
-1. ADAPTIVE TSBP (Option A)
----------------------------
-Key Contributions:
-- Adaptive Threshold Selection: Instead of fixed confidence thresholds (0.5/0.3),
-  we employ quantile-based, per-class adaptive thresholds that automatically adjust
-  to the score distribution of each object category. This addresses the limitation
-  that optimal thresholds vary significantly across datasets and classes.
-
-- Confidence Score Propagation: Matched candidates receive refined confidence scores
-  based on their feature distance to confirmed boxes, weighted by the original score.
-  This provides better uncertainty estimation than binary classification.
-
-- Spatial Consistency Constraints: We introduce spatial context modeling where
-  candidates are matched preferentially to spatially proximate confirmed boxes,
-  enforcing local coherence in detection propagation.
-
-Mathematical Framework:
-- Adaptive threshold for class c: τ_c = Q_α(S_c) where Q_α is the α-quantile
-  of confidence scores S_c for detections of class c
-- Refined confidence: s'_i = λ·s_i + (1-λ)·exp(-d_ij/σ)·s_j where d_ij is
-  feature distance, s_j is matched confirmed box score, λ balances original/propagated
-- Spatial weight: w_spatial = exp(-||p_i - p_j||²/2σ_spatial²) where p are bbox centers
-
-Theoretical Justification:
-The adaptive approach addresses distributional shift between training and test data.
-Fixed thresholds assume consistent score calibration, which fails under domain shift.
-Quantile-based selection is invariant to monotonic score transformations, making it
-more robust. Spatial constraints leverage the prior that nearby detections are more
-likely to share semantic identity in natural images.
-
-2. HIERARCHICAL FEATURE TSBP (Option B)
----------------------------------------
-Key Contributions:
-- Multi-Scale Feature Fusion: Instead of using only the final ResNet layer, we extract
-  features from multiple layers (conv3, conv4, conv5) capturing both semantic and
-  spatial information. This multi-scale representation better captures objects at
-  different scales and appearance variations.
-
-- Learned Feature Weighting: Rather than heuristic concatenation (histogram * 15),
-  we use attention-based weighting to dynamically combine feature sources based on
-  their discriminative power for each detection.
-
-- Graph-Based Propagation: We replace EMD with a more efficient graph construction
-  where nodes are detections and edges encode feature similarity. Label propagation
-  on this graph naturally handles multi-hop relationships and provides uncertainty
-  estimates through convergence analysis.
-
-Mathematical Framework:
-- Multi-scale features: F_i = [f¹_i; f²_i; f³_i] from layers l=3,4,5
-- Attention weights: α_k = softmax(w^T tanh(W·[F_i; F_j])) for feature source k
-- Weighted feature: F'_i = Σ_k α_k·F^k_i
-- Graph propagation: Y^(t+1) = αS·Y^(t) + (1-α)Y^(0) where S is similarity matrix,
-  Y^(0) are initial labels, α is propagation coefficient
-
-Theoretical Justification:
-Multi-scale features provide complementary information: deep layers encode semantic
-content (what), while shallow layers preserve spatial details (where). The attention
-mechanism adaptively selects relevant features based on context, analogous to
-feature pyramid networks but applied post-detection. Graph-based propagation
-naturally handles the transitive similarity problem: if A matches B and B matches C,
-then A and C should be related even if their direct similarity is weak.
-
-3. TSBP++ (Option C)
---------------------
-Key Contributions:
-This is a unified framework combining the strengths of Options A and B with additional
-enhancements:
-
-- Unified Adaptive Framework: Combines adaptive thresholds, multi-scale features,
-  and graph propagation into a coherent pipeline
-
-- Progressive Confidence Refinement: Multi-round propagation where confidence scores
-  are iteratively refined, with each round using updated scores to compute new
-  matching weights
-
-- Uncertainty-Aware Matching: Incorporates epistemic uncertainty (feature variance
-  in neighborhoods) and aleatoric uncertainty (score variance) to weight matches
-
-- Early Stopping with Convergence Detection: Automatically terminates when the
-  improvement in F1 score (estimated on propagated set) falls below threshold,
-  preventing overfitting to noise
-
-- Class-Specific EMD: Performs separate matching per class with class-specific
-  distance metrics, addressing the class imbalance problem
-
-Mathematical Framework:
-- Epistemic uncertainty: U_epistemic(i) = Var_{j∈N(i)}[F_j] (variance in k-NN features)
-- Aleatoric uncertainty: U_aleatoric(i) = 1 - s_i (inverse of confidence score)
-- Combined uncertainty weight: w_i = 1/(1 + U_epistemic + U_aleatoric)
-- Weighted EMD distance: D'_ij = D_ij·(w_i + w_j)/2
-- Convergence criterion: Stop if ΔF1 < ε for k consecutive rounds
-
-Theoretical Justification:
-TSBP++ addresses three fundamental limitations of the original method:
-1. Fixed thresholds and single-scale features cause brittleness to distribution shift
-2. Global EMD ignores class-specific characteristics and spatial structure
-3. Lack of stopping criteria can lead to error propagation
-
-By combining adaptive mechanisms, multi-scale reasoning, and uncertainty quantification,
-TSBP++ achieves robustness across diverse scenarios. The convergence-based stopping
-prevents the "confirmation bias" problem where early errors propagate and amplify.
-
-EXPERIMENTAL CONSIDERATIONS:
-----------------------------
-All three methods maintain compatibility with the original TSBP interface and
-file I/O format. Key hyperparameters are exposed for ablation studies:
-- tp_quantile, fp_quantile: Control adaptive threshold percentiles
-- lambda_score: Balance original vs. propagated confidence
-- sigma_spatial: Spatial consistency bandwidth
-- num_scales: Number of feature pyramid levels
-- propagation_alpha: Graph propagation strength
-- uncertainty_weight: Uncertainty penalty strength
-
-Expected Performance Gains:
-- Adaptive TSBP: +2-5% mAP on domain-shifted test sets
-- Hierarchical Feature TSBP: +3-7% mAP on multi-scale object datasets
-- TSBP++: +5-10% mAP combining all improvements, especially on long-tailed distributions
-
-Implementation Notes:
-- All variants support GPU acceleration
-- Feature extraction is cached to avoid recomputation
-- Graph operations use sparse matrices for efficiency
-- Checkpointing allows resumption of long runs
-"""
-
 import os
 import numpy as np
 import torch
@@ -158,8 +23,22 @@ class TS:
     def __init__(self):
         pass
 
-    def load_detections(self, txt_path, img_path, use_histogram=False):
+    def load_detections(self, txt_file, image_dir, infer_dir, use_histogram=False):
         """Load detections from YOLO format text file"""
+        img_name = os.path.splitext(txt_file)[0]
+        txt_path = os.path.join(infer_dir, txt_file)
+
+        img_path = None
+        for ext in ['.png', '.jpg', '.jpeg', '.tif', '.tiff']:
+            test_path = os.path.join(image_dir, img_name + ext)
+            if os.path.exists(test_path):
+                img_path = test_path
+                break
+
+        if img_path is None:
+            print(f"Warning: Image not found for {img_name}")
+            return []
+
         if not os.path.exists(txt_path):
             return []
 
@@ -300,8 +179,7 @@ class TS:
 
 class AdaptiveTSBP(TS):
     """
-    Adaptive TSBP with quantile-based thresholds, confidence propagation,
-    and spatial consistency constraints.
+    Adaptive TSBP with quantile-based thresholds, confidence propagation, and spatial consistency constraints.
     """
 
     def __init__(self, device=None):
@@ -331,17 +209,12 @@ class AdaptiveTSBP(TS):
 
         if use_histogram:
             image_bgr = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
-            hist = self.calc_hist(image_bgr) * 15
+            hist = cv2.calcHist([image_bgr], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+            hist = cv2.normalize(hist, hist).flatten()
+            hist = hist * 15
             features = torch.from_numpy(np.concatenate((hist, features.numpy())))
 
         return features
-
-    def calc_hist(self, img_bgr):
-        """Calculate color histogram (8x8x8 bins)"""
-        hist = cv2.calcHist([img_bgr], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
-        hist = cv2.normalize(hist, hist).flatten()
-        return hist
-
 
 
     def compute_spatial_distance(self, det1, det2, sigma_spatial=0.2):
@@ -359,8 +232,7 @@ class AdaptiveTSBP(TS):
         weight = np.exp(-spatial_dist ** 2 / (2 * sigma_spatial ** 2))
         return weight
 
-    def refine_confidence(self, candidate, matched_det, feature_dist,
-                          lambda_score=0.5, sigma_dist=100.0):
+    def refine_confidence(self, candidate, matched_det, feature_dist, lambda_weight=0.5, sigma_dist=100.0):
         """
         Refine candidate confidence based on matched detection.
 
@@ -368,7 +240,7 @@ class AdaptiveTSBP(TS):
             candidate: Candidate detection dict
             matched_det: Matched high-confidence detection dict
             feature_dist: Feature distance between candidate and match
-            lambda_score: Weight for original score (vs propagated)
+            lambda_weight: Weight for original score (vs propagated)
             sigma_dist: Bandwidth for distance-based weight
 
         Returns:
@@ -384,7 +256,7 @@ class AdaptiveTSBP(TS):
         propagated_score = dist_weight * matched_score
 
         # Combine original and propagated
-        refined_score = lambda_score * original_score + (1 - lambda_score) * propagated_score
+        refined_score = lambda_weight * original_score + (1 - lambda_weight) * propagated_score
 
         return min(1.0, refined_score)  # Cap at 1.0
 
@@ -392,7 +264,7 @@ class AdaptiveTSBP(TS):
     def run_tsbp(self, image_dir, infer_dir, out_dir,
                  tp_quantile=0.8, fp_quantile=0.2,
                  start_tp_num=25, start_fp_num=25,
-                 lambda_score=0.5, sigma_spatial=0.2,
+                 lambda_weight=0.5, sigma_spatial=0.2,
                  use_histogram=False):
         """
         Run Adaptive TSBP algorithm.
@@ -405,7 +277,7 @@ class AdaptiveTSBP(TS):
             fp_quantile: Quantile for low-confidence threshold (0.2 = bottom 20%)
             start_tp_num: Number of clusters for TP K-means
             start_fp_num: Number of clusters for FP K-means
-            lambda_score: Weight for original vs propagated confidence
+            lambda_weight: Weight for original vs propagated confidence
             sigma_spatial: Spatial consistency bandwidth
             use_histogram: Whether to use color histogram features
         """
@@ -425,20 +297,8 @@ class AdaptiveTSBP(TS):
 
         for txt_file in txt_files:
             img_name = os.path.splitext(txt_file)[0]
-            txt_path = os.path.join(infer_dir, txt_file)
 
-            img_path = None
-            for ext in ['.png', '.jpg', '.jpeg', '.tif', '.tiff']:
-                test_path = os.path.join(image_dir, img_name + ext)
-                if os.path.exists(test_path):
-                    img_path = test_path
-                    break
-
-            if img_path is None:
-                print(f"Warning: Image not found for {img_name}")
-                continue
-
-            detections = self.load_detections(txt_path, img_path, use_histogram)
+            detections = self.load_detections(txt_file, image_dir, infer_dir, use_histogram)
 
             if not detections:
                 image_detections[img_name] = []
@@ -456,9 +316,7 @@ class AdaptiveTSBP(TS):
 
         # Compute adaptive thresholds per class
         print("\n=== Computing Adaptive Thresholds ===")
-        class_thresholds = self.compute_adaptive_thresholds(
-            all_detections, tp_quantile, fp_quantile
-        )
+        class_thresholds = self.compute_adaptive_thresholds(all_detections, tp_quantile, fp_quantile)
 
         for class_id, (tp_th, fp_th) in class_thresholds.items():
             print(f"Class {class_id}: TP threshold = {tp_th:.3f}, FP threshold = {fp_th:.3f}")
@@ -548,9 +406,7 @@ class AdaptiveTSBP(TS):
 
                     # Spatial weight (only for non-cluster centers)
                     if not Q_dets[j].get('is_cluster_center', False):
-                        spatial_weight = self.compute_spatial_distance(
-                            all_candidates[i], Q_dets[j], sigma_spatial
-                        )
+                        spatial_weight = self.compute_spatial_distance(all_candidates[i], Q_dets[j], sigma_spatial)
                     else:
                         spatial_weight = 1.0  # No spatial penalty for cluster centers
 
@@ -606,9 +462,7 @@ class AdaptiveTSBP(TS):
 
                     # Refine confidence score
                     if not match['matched_det'].get('is_cluster_center', False):
-                        cand['score'] = self.refine_confidence(
-                            cand, match['matched_det'], match['dist'], lambda_score
-                        )
+                        cand['score'] = self.refine_confidence(cand, match['matched_det'], match['dist'], lambda_weight)
 
                     all_tp_orig.append(cand)
                     boxes_tp.append(cand)
@@ -654,8 +508,7 @@ class AdaptiveTSBP(TS):
 
 class HierarchicalFeatureTSBP(TS):
     """
-    Hierarchical Feature TSBP with multi-scale features, learned weighting,
-    and graph-based propagation.
+    Hierarchical Feature TSBP with multi-scale features, learned weighting, and graph-based propagation.
     """
 
     def __init__(self, device=None, num_scales=3):
@@ -692,10 +545,6 @@ class HierarchicalFeatureTSBP(TS):
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
 
-        # Simple attention for feature weighting (can be made learnable)
-        # Feature dimensions: layer2=512, layer3=1024, layer4=2048, hist=512
-        self.feature_dims = [512, 1024, 2048, 512]
-
     def extract_multiscale_features(self, image_pil, use_histogram=False):
         """Extract multi-scale deep features from image"""
         image_tensor = self.transform(image_pil).unsqueeze(0).to(self.device)
@@ -716,8 +565,7 @@ class HierarchicalFeatureTSBP(TS):
 
         if use_histogram:
             image_bgr = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
-            hist = cv2.calcHist([image_bgr], [0, 1, 2], None, [8, 8, 8],
-                                [0, 256, 0, 256, 0, 256])
+            hist = cv2.calcHist([image_bgr], [0, 1, 2], None, [8, 8, 8],[0, 256, 0, 256, 0, 256])
             hist = cv2.normalize(hist, hist).flatten()
             hist_tensor = torch.from_numpy(hist).float()
             features_list.append(hist_tensor)
@@ -764,10 +612,9 @@ class HierarchicalFeatureTSBP(TS):
     def extract_features(self, image_pil, use_histogram=False):
         features_list = self.extract_multiscale_features(image_pil, use_histogram)
         fused_feature = self.fuse_features(features_list)
-
         return fused_feature
 
-    def build_similarity_graph(self, detections, k_neighbors=10):
+    def build_similarity_graph(self, detections, k_neighbors=10, sigma=100):
         """
         Build k-NN similarity graph for label propagation.
 
@@ -799,21 +646,16 @@ class HierarchicalFeatureTSBP(TS):
 
             for j, dist in zip(topk_idx, topk_dist):
                 # Gaussian kernel for similarity
-                sim = torch.exp(-dist ** 2 / (2 * 100 ** 2))  # sigma=100
+                sim = torch.exp(-dist ** 2 / (2 * sigma ** 2))  # sigma=100
 
                 row_idx.append(i)
                 col_idx.append(j.item())
                 data.append(sim.item())
 
         # Create sparse matrix
-        similarity_matrix = csr_matrix(
-            (data, (row_idx, col_idx)),
-            shape=(n, n)
-        )
-
+        similarity_matrix = csr_matrix((data, (row_idx, col_idx)), shape=(n, n))
         # Symmetrize
         similarity_matrix = (similarity_matrix + similarity_matrix.T) / 2
-
         # Row normalize
         row_sums = np.array(similarity_matrix.sum(axis=1)).flatten()
         row_sums[row_sums == 0] = 1  # Avoid division by zero
@@ -822,8 +664,7 @@ class HierarchicalFeatureTSBP(TS):
 
         return similarity_matrix
 
-    def graph_label_propagation(self, similarity_matrix, initial_labels,
-                                alpha=0.8, max_iter=30, tol=1e-3):
+    def graph_label_propagation(self, similarity_matrix, initial_labels, alpha=0.8, max_iter=30, tol=1e-3):
         """
         Perform label propagation on similarity graph.
 
@@ -887,20 +728,8 @@ class HierarchicalFeatureTSBP(TS):
 
         for txt_file in txt_files:
             img_name = os.path.splitext(txt_file)[0]
-            txt_path = os.path.join(infer_dir, txt_file)
 
-            img_path = None
-            for ext in ['.png', '.jpg', '.jpeg', '.tif', '.tiff']:
-                test_path = os.path.join(image_dir, img_name + ext)
-                if os.path.exists(test_path):
-                    img_path = test_path
-                    break
-
-            if img_path is None:
-                print(f"Warning: Image not found for {img_name}")
-                continue
-
-            detections = self.load_detections(txt_path, img_path, use_histogram)
+            detections = self.load_detections(txt_file, image_dir, infer_dir, use_histogram)
 
             if not detections:
                 image_detections[img_name] = []
@@ -1122,10 +951,7 @@ class TSBPPlusPlus(TS):
         return epistemic, aleatoric
 
 
-
-
-    def run_class_specific_emd(self, candidates, confirmed_boxes, class_id,
-                               thresh_dist, uncertainty_weight=0.5):
+    def run_class_specific_emd(self, candidates, confirmed_boxes, class_id, thresh_dist, uncertainty_weight=0.5):
         """
         Run EMD matching for a specific class with uncertainty weighting.
 
@@ -1237,20 +1063,8 @@ class TSBPPlusPlus(TS):
 
         for txt_file in txt_files:
             img_name = os.path.splitext(txt_file)[0]
-            txt_path = os.path.join(infer_dir, txt_file)
 
-            img_path = None
-            for ext in ['.png', '.jpg', '.jpeg', '.tif', '.tiff']:
-                test_path = os.path.join(image_dir, img_name + ext)
-                if os.path.exists(test_path):
-                    img_path = test_path
-                    break
-
-            if img_path is None:
-                print(f"Warning: Image not found for {img_name}")
-                continue
-
-            detections = self.load_detections(txt_path, img_path, use_histogram)
+            detections = self.load_detections(txt_file, image_dir, infer_dir, use_histogram)
 
             if not detections:
                 image_detections[img_name] = []
@@ -1350,8 +1164,7 @@ class TSBPPlusPlus(TS):
                 # Update
                 confirmed_tp.extend(matched)
                 for m in matched:
-                    remaining_candidates = [c for c in remaining_candidates
-                                            if c['bbox'] != m['bbox']]
+                    remaining_candidates = [c for c in remaining_candidates if c['bbox'] != m['bbox']]
 
                 # Convergence check
                 current_tp_count = len(confirmed_tp)
@@ -1380,15 +1193,522 @@ class TSBPPlusPlus(TS):
         self._save_results(all_final_tp, image_detections, out_dir)
 
 
+# https://arxiv.org/abs/2409.16678
+# https://github.com/jwhgdeu/TSBP
+# IMPROVED TSBP - Conservative enhancements focused on robustness and precision
 
-# ============================================================================
-# CONVENIENCE FUNCTIONS
-# ============================================================================
+import os
+import numpy as np
+import torch
+import torch.nn as nn
+import torchvision.models as models
+import torchvision.transforms as transforms
+from PIL import Image
+import cv2
+from sklearn.cluster import KMeans
+import ot  # Python Optimal Transport: pip install POT
+from torchvision.models import ResNet50_Weights
+
+
+class ImprovedTSBPDetector:
+    """
+    Improved TSBP with conservative enhancements:
+
+    1. Score-weighted EMD: Weight the transport by confidence scores to prioritize
+       matching high-confidence candidates first
+
+    2. Per-class processing: Handle each class independently to prevent cross-class
+       interference and allow class-specific thresholds
+
+    3. IoU-based filtering: Add spatial consistency by preferring matches that don't
+       violate basic spatial logic (e.g., very distant boxes shouldn't match)
+
+    4. Adaptive distance thresholds: Compute thresholds based on actual feature distance
+       distribution rather than fixed multipliers
+
+    5. Iterative refinement with early stopping: Stop when adding candidates no longer
+       improves the quality of the confirmed set
+    """
+
+    def __init__(self, device=None):
+        self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self._init_feature_extractor()
+
+    def _init_feature_extractor(self):
+        """Initialize ResNet50 feature extractor"""
+        resnet_50 = models.resnet50(weights=ResNet50_Weights.DEFAULT)
+        modules = list(resnet_50.children())[:-1]
+        self.resnet = nn.Sequential(*modules)
+        self.resnet.to(self.device)
+        self.resnet.eval()
+
+        self.transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+
+    def extract_features(self, image_pil):
+        """Extract deep features from image crop using ResNet50"""
+        image_tensor = self.transform(image_pil).unsqueeze(0).to(self.device)
+        with torch.no_grad():
+            features = self.resnet(image_tensor).squeeze().cpu()
+        return features
+
+    def calc_hist(self, img_bgr):
+        """Calculate color histogram (8x8x8 bins)"""
+        hist = cv2.calcHist([img_bgr], [0, 1, 2], None, [8, 8, 8], [0, 256, 0, 256, 0, 256])
+        hist = cv2.normalize(hist, hist).flatten()
+        return hist
+
+    def extract_features_with_hist(self, image_pil):
+        """Extract combined features: ResNet50 + color histogram"""
+        deep_features = self.extract_features(image_pil)
+        image_bgr = cv2.cvtColor(np.array(image_pil), cv2.COLOR_RGB2BGR)
+        hist = self.calc_hist(image_bgr) * 15
+        features = torch.from_numpy(np.concatenate((hist, deep_features.numpy())))
+        return features
+
+    def compute_iou(self, box1, box2):
+        """Compute IoU between two boxes (x1, y1, x2, y2)"""
+        x1_max = max(box1[0], box2[0])
+        y1_max = max(box1[1], box2[1])
+        x2_min = min(box1[2], box2[2])
+        y2_min = min(box1[3], box2[3])
+
+        if x2_min <= x1_max or y2_min <= y1_max:
+            return 0.0
+
+        intersection = (x2_min - x1_max) * (y2_min - y1_max)
+        area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
+        area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
+        union = area1 + area2 - intersection
+
+        return intersection / union if union > 0 else 0.0
+
+    def load_detections(self, txt_path, img_path, use_histogram=False):
+        """Load detections from YOLO format text file"""
+        if not os.path.exists(txt_path):
+            return []
+
+        img = Image.open(img_path).convert('RGB')
+        detections = []
+
+        with open(txt_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+
+                parts = line.split(',')
+                if len(parts) != 6:
+                    continue
+
+                class_id, x, y, w, h, score = [float(p.strip()) for p in parts]
+
+                x1, y1 = int(x), int(y)
+                x2, y2 = int(x + w), int(y + h)
+
+                if x2 <= x1 + 2 or y2 <= y1 + 2:
+                    continue
+
+                crop = img.crop((x1, y1, x2, y2))
+                if use_histogram:
+                    features = self.extract_features_with_hist(crop)
+                else:
+                    features = self.extract_features(crop)
+
+                detection = {
+                    'bbox': (x1, y1, x2, y2),
+                    'bbox_orig': (x, y, w, h),
+                    'score': score,
+                    'class': int(class_id),
+                    'feature': features
+                }
+                detections.append(detection)
+
+        return detections
+
+    def cal_min_dist_stats(self, detections):
+        """Calculate average minimum distance between detections"""
+        if len(detections) < 2:
+            return float('inf'), float('inf')
+
+        features = torch.stack([d['feature'] for d in detections])
+        distances = torch.cdist(features, features, p=2)
+        distances.fill_diagonal_(float('inf'))
+
+        min_distances, _ = torch.min(distances, dim=1)
+        min_distances, _ = torch.sort(min_distances)
+
+        min_dis = float(min_distances[0])
+        dist_avg = float(torch.sum(min_distances) / len(detections))
+
+        return dist_avg, min_dis
+
+    def kmeans_clustering(self, detections, num_clusters):
+        """Apply K-means clustering to detections"""
+        if len(detections) < num_clusters:
+            return detections, [d['feature'] for d in detections]
+
+        features = torch.stack([d['feature'] for d in detections])
+
+        kmeans = KMeans(n_clusters=num_clusters, max_iter=500, n_init=10, random_state=1234)
+        kmeans.fit(features.numpy())
+
+        clustered_dets = []
+        clustered_feats = []
+        for i in range(num_clusters):
+            det = {
+                'bbox': (0, 0, 0, 0),
+                'bbox_orig': (0, 0, 0, 0),
+                'score': 1.0,
+                'class': detections[0]['class'],
+                'feature': torch.from_numpy(kmeans.cluster_centers_[i]),
+                'is_cluster_center': True
+            }
+            clustered_dets.append(det)
+            clustered_feats.append(det['feature'])
+
+        return clustered_dets, clustered_feats
+
+    def compute_adaptive_thresholds(self, tp_dets, fp_dets, tp_quantile=0.7, fp_quantile=0.7):
+        """
+        Compute adaptive distance thresholds based on feature distance distribution.
+        Uses percentile of minimum distances within TP and FP sets.
+        """
+        # For TP: use stricter threshold (lower percentile of distances)
+        if len(tp_dets) >= 2:
+            tp_features = torch.stack([d['feature'] for d in tp_dets])
+            tp_distances = torch.cdist(tp_features, tp_features, p=2)
+            tp_distances.fill_diagonal_(float('inf'))
+            tp_min_dists = torch.min(tp_distances, dim=1)[0]
+            thresh_tp = float(torch.quantile(tp_min_dists, tp_quantile))
+        else:
+            thresh_tp = float('inf')
+
+        # For FP: use more relaxed threshold
+        if len(fp_dets) >= 2:
+            fp_features = torch.stack([d['feature'] for d in fp_dets])
+            fp_distances = torch.cdist(fp_features, fp_features, p=2)
+            fp_distances.fill_diagonal_(float('inf'))
+            fp_min_dists = torch.min(fp_distances, dim=1)[0]
+            thresh_fp = float(torch.quantile(fp_min_dists, fp_quantile))
+        else:
+            thresh_fp = float('inf')
+
+        return thresh_tp, thresh_fp
+
+    def run_tsbp(self, image_dir, infer_dir, out_dir,
+                 tp_threshold=0.50, fp_threshold=0.30,
+                 start_tp_num=25, start_fp_num=25,
+                 use_histogram=False,
+                 adaptive_thresh=True,
+                 tp_quantile=0.7,
+                 fp_quantile=0.7,
+                 max_iou_for_match=0.3,
+                 score_weight_emd=True):
+        """
+        Run improved TSBP algorithm.
+
+        Args:
+            adaptive_thresh: Use adaptive distance thresholds based on distribution
+            tp_quantile: Quantile for TP distance threshold (lower = stricter)
+            fp_quantile: Quantile for FP distance threshold
+            max_iou_for_match: Maximum IoU between candidate and confirmed boxes
+                              (prevents matching boxes that heavily overlap)
+            score_weight_emd: Weight EMD by detection confidence scores
+        """
+        os.makedirs(out_dir, exist_ok=True)
+
+        txt_files = [f for f in os.listdir(infer_dir) if f.endswith('.txt')]
+        if not txt_files:
+            print(f"No .txt files found in {infer_dir}")
+            return
+
+        print(f"Processing {len(txt_files)} detection files...")
+
+        # Collect detections per class
+        class_detections = {}
+        image_detections = {}
+
+        for txt_file in txt_files:
+            img_name = os.path.splitext(txt_file)[0]
+            txt_path = os.path.join(infer_dir, txt_file)
+
+            img_path = None
+            for ext in ['.png', '.jpg', '.jpeg', '.tif', '.tiff']:
+                test_path = os.path.join(image_dir, img_name + ext)
+                if os.path.exists(test_path):
+                    img_path = test_path
+                    break
+
+            if img_path is None:
+                continue
+
+            detections = self.load_detections(txt_path, img_path, use_histogram)
+            image_detections[img_name] = detections
+
+            for det in detections:
+                det['img_name'] = img_name
+                class_id = det['class']
+                if class_id not in class_detections:
+                    class_detections[class_id] = []
+                class_detections[class_id].append(det)
+
+        # Process each class independently
+        all_final_detections = []
+
+        for class_id, all_dets in class_detections.items():
+            print(f"\n{'=' * 60}")
+            print(f"Processing class {class_id}: {len(all_dets)} detections")
+            print(f"{'=' * 60}")
+
+            # Split into TP, FP, and candidates based on scores
+            tp_orig = [d for d in all_dets if d['score'] >= tp_threshold]
+            fp_orig = [d for d in all_dets if d['score'] < fp_threshold]
+            candidates = [d for d in all_dets if fp_threshold <= d['score'] < tp_threshold]
+
+            print(f"Initial split - TP: {len(tp_orig)}, Candidates: {len(candidates)}, FP: {len(fp_orig)}")
+
+            if not tp_orig:
+                print("No high-confidence detections, skipping class")
+                all_final_detections.extend(tp_orig)
+                continue
+
+            # Cluster TP and FP
+            boxes_tp, _ = self.kmeans_clustering(tp_orig, min(start_tp_num, len(tp_orig)))
+            boxes_fp, _ = self.kmeans_clustering(fp_orig, min(start_fp_num, len(fp_orig))) if fp_orig else ([], [])
+
+            # Separate cluster centers from real boxes
+            boxes_tp_real = [d for d in boxes_tp if not d.get('is_cluster_center', False)]
+            boxes_tp_centers = [d for d in boxes_tp if d.get('is_cluster_center', False)]
+            boxes_fp_centers = [d for d in boxes_fp if d.get('is_cluster_center', False)]
+
+            # Add original TP to confirmed
+            confirmed_tp = list(tp_orig)
+
+            # Compute adaptive thresholds if enabled
+            if adaptive_thresh:
+                thresh_dist_tp, thresh_dist_fp = self.compute_adaptive_thresholds(
+                    tp_orig, fp_orig, tp_quantile, fp_quantile
+                )
+                print(f"Adaptive thresholds - TP: {thresh_dist_tp:.2f}, FP: {thresh_dist_fp:.2f}")
+            else:
+                # Use original fixed method
+                dist_avg_tp, min_dis_tp = self.cal_min_dist_stats(tp_orig)
+                dist_avg_fp, min_dis_fp = self.cal_min_dist_stats(fp_orig) if fp_orig else (float('inf'), float('inf'))
+                thresh_dist_tp = dist_avg_tp
+                thresh_dist_fp = dist_avg_fp
+                print(f"Fixed thresholds - TP: {thresh_dist_tp:.2f}, FP: {thresh_dist_fp:.2f}")
+
+            # Iterative propagation
+            use_strict = True
+            max_iterations = 20
+
+            for iteration in range(max_iterations):
+                if not candidates:
+                    print("No more candidates")
+                    break
+
+                print(f"\nIteration {iteration + 1}")
+
+                len_cand = len(candidates)
+                len_tp = len(boxes_tp)
+                len_fp = len(boxes_fp)
+                full_len = len_cand + len_tp + len_fp
+
+                if full_len == 0 or len_cand == 0:
+                    break
+
+                print(f"Candidates: {len_cand}, TP: {len_tp}, FP: {len_fp}")
+
+                # EMD with optional score weighting
+                if score_weight_emd:
+                    # Weight by scores - higher confidence candidates get more weight
+                    cand_scores = np.array([c['score'] for c in candidates])
+                    cand_scores = cand_scores / cand_scores.sum()
+                    P = np.zeros(full_len)
+                    P[:len_cand] = cand_scores
+                else:
+                    P = np.array([1.0 if i < len_cand else 0.0 for i in range(full_len)])
+
+                Q = np.array([0.0 if i < len_cand else 1.0 for i in range(full_len)])
+
+                # Distance matrix
+                Q_dets = boxes_tp + boxes_fp
+                D = np.zeros((full_len, full_len))
+
+                for i in range(len_cand):
+                    for j in range(len_tp + len_fp):
+                        dist = torch.dist(candidates[i]['feature'], Q_dets[j]['feature']).item()
+
+                        # Add spatial penalty for boxes with high IoU
+                        # (prevents matching boxes that heavily overlap)
+                        if not Q_dets[j].get('is_cluster_center', False):
+                            iou = self.compute_iou(candidates[i]['bbox'], Q_dets[j]['bbox'])
+                            if iou > max_iou_for_match:
+                                dist *= 2.0  # Penalize matching of overlapping boxes
+
+                        D[i][len_cand + j] = dist
+                        D[len_cand + j][i] = dist
+
+                # Normalize and compute EMD
+                P_norm = P / P.sum() if P.sum() > 0 else P
+                Q_norm = Q / Q.sum() if Q.sum() > 0 else Q
+                flow = ot.emd(P_norm, Q_norm, D)
+                flow = flow * min(P.sum(), Q.sum())
+
+                # Collect matches
+                tp_matched = []
+                fp_matched = []
+
+                for i in range(len_cand):
+                    for j in range(len_tp + len_fp):
+                        if flow[i][len_cand + j] > 0:
+                            cand = candidates[i]
+                            dist = D[i][len_cand + j]
+
+                            if j < len_tp:
+                                tp_matched.append({'cand': cand, 'dist': dist})
+                            else:
+                                fp_matched.append({'cand': cand, 'dist': dist})
+
+                tp_matched.sort(key=lambda x: x['dist'])
+                fp_matched.sort(key=lambda x: x['dist'])
+
+                print(f"Matched - TP: {len(tp_matched)}, FP: {len(fp_matched)}")
+                if tp_matched:
+                    print(f"  TP dist range: [{tp_matched[0]['dist']:.2f}, {tp_matched[-1]['dist']:.2f}]")
+                if fp_matched:
+                    print(f"  FP dist range: [{fp_matched[0]['dist']:.2f}, {fp_matched[-1]['dist']:.2f}]")
+
+                # Add candidates under threshold
+                added_cands = []
+                tp_add = 0
+                fp_add = 0
+
+                for match in tp_matched:
+                    if match['dist'] <= thresh_dist_tp:
+                        cand = match['cand']
+                        confirmed_tp.append(cand)
+                        boxes_tp.append(cand)
+                        added_cands.append(cand)
+                        tp_add += 1
+
+                for match in fp_matched:
+                    if match['dist'] <= thresh_dist_fp:
+                        cand = match['cand']
+                        boxes_fp.append(cand)
+                        added_cands.append(cand)
+                        fp_add += 1
+
+                # Remove added candidates
+                for cand in added_cands:
+                    candidates = [c for c in candidates if c['bbox'] != cand['bbox']]
+
+                print(f"Added - TP: {tp_add}, FP: {fp_add}")
+
+                # Check termination
+                if tp_add == 0 and fp_add == 0:
+                    if use_strict:
+                        print("Relaxing constraints")
+                        boxes_tp.extend(boxes_tp_centers)
+                        boxes_fp.extend(boxes_fp_centers)
+                        thresh_dist_tp = float('inf')
+                        thresh_dist_fp = float('inf')
+                        use_strict = False
+                    else:
+                        print("No progress, stopping")
+                        break
+
+            print(f"\nClass {class_id} final: {len(confirmed_tp)} detections")
+            all_final_detections.extend(confirmed_tp)
+
+        print(f"\n{'=' * 60}")
+        print(f"TSBP Complete - Total detections: {len(all_final_detections)}")
+        print(f"{'=' * 60}")
+
+        self._save_results(all_final_detections, image_detections, out_dir)
+
+    def _save_results(self, final_detections, image_detections, out_dir):
+        """Save refined detection results to text files"""
+        # Group by image
+        image_results = {}
+        for det in final_detections:
+            img_name = det.get('img_name')
+            if img_name:
+                if img_name not in image_results:
+                    image_results[img_name] = []
+                image_results[img_name].append(det)
+
+        # Write files
+        for img_name, dets in image_results.items():
+            out_path = os.path.join(out_dir, f"{img_name}.txt")
+            with open(out_path, 'w') as f:
+                for det in dets:
+                    x, y, w, h = det['bbox_orig']
+                    score = det['score']
+                    class_id = det['class']
+                    f.write(f"{class_id}, {int(x)}, {int(y)}, {int(w)}, {int(h)}, {score}\n")
+
+        print(f"Results saved to {out_dir}")
+
+
+def run_tsbp_pipeline(model_name, data_root, results_inf_all_root,
+                      tp_threshold=0.50, fp_threshold=0.30,
+                      start_tp_num=25, start_fp_num=25,
+                      use_histogram=False,
+                      adaptive_thresh=True,
+                      tp_quantile=0.7,
+                      fp_quantile=0.7,
+                      max_iou_for_match=0.3,
+                      score_weight_emd=True):
+    """
+    Run improved TSBP pipeline.
+
+    Key improvements over baseline:
+    - Per-class processing to avoid cross-class interference
+    - Adaptive distance thresholds based on feature distribution
+    - IoU-based spatial filtering to prevent matching overlapping boxes
+    - Score-weighted EMD to prioritize high-confidence candidates
+    """
+    image_dir = f"{data_root}/images/test/"
+    infer_dir = f"{results_inf_all_root}/{model_name}/"
+    out_dir = f"{results_inf_all_root}/{model_name}/tsbp_improved/"
+
+    print("=" * 60)
+    print("Improved TSBP: Conservative Enhancements")
+    print("=" * 60)
+    print(f"Model: {model_name}")
+    print(f"Adaptive thresholds: {adaptive_thresh}")
+    print(f"Score-weighted EMD: {score_weight_emd}")
+    print(f"Max IoU for match: {max_iou_for_match}")
+    print("=" * 60)
+
+    detector = ImprovedTSBPDetector()
+    detector.run_tsbp(
+        image_dir=image_dir,
+        infer_dir=infer_dir,
+        out_dir=out_dir,
+        tp_threshold=tp_threshold,
+        fp_threshold=fp_threshold,
+        start_tp_num=start_tp_num,
+        start_fp_num=start_fp_num,
+        use_histogram=use_histogram,
+        adaptive_thresh=adaptive_thresh,
+        tp_quantile=tp_quantile,
+        fp_quantile=fp_quantile,
+        max_iou_for_match=max_iou_for_match,
+        score_weight_emd=score_weight_emd
+    )
+
+
 
 def run_adaptive_tsbp(model_name, data_root, results_inf_all_root,
                       tp_quantile=0.8, fp_quantile=0.2,
                       start_tp_num=25, start_fp_num=25,
-                      lambda_score=0.5, sigma_spatial=0.2,
+                      lambda_weight=0.5, sigma_spatial=0.2,
                       use_histogram=False):
     """Run Adaptive TSBP pipeline"""
     image_dir = f"{data_root}/images/test/"
@@ -1411,14 +1731,14 @@ def run_adaptive_tsbp(model_name, data_root, results_inf_all_root,
         fp_quantile=fp_quantile,
         start_tp_num=start_tp_num,
         start_fp_num=start_fp_num,
-        lambda_score=lambda_score,
+        lambda_weight=lambda_weight,
         sigma_spatial=sigma_spatial,
         use_histogram=use_histogram
     )
 
 
 def run_hierarchical_tsbp(model_name, data_root, results_inf_all_root,
-                        tp_quantile=0.8, fp_quantile=0.2,
+                          tp_quantile=0.8, fp_quantile=0.2,
                           k_neighbors=10, propagation_alpha=0.8,
                           use_histogram=False):
     """Run Hierarchical Feature TSBP pipeline"""
@@ -1492,8 +1812,8 @@ def main_one_model():
         results_inf_all_root=results_inf_all_root,
         tp_quantile=0.8,
         fp_quantile=0.2,
-        lambda_score=0.5,
-        sigma_spatial=0.2,
+        lambda_weight=0.5,
+        sigma_spatial=0.1,
         use_histogram=False
     )
 
@@ -1502,8 +1822,8 @@ def main_one_model():
         model_name=MODEL,
         data_root=data_root,
         results_inf_all_root=results_inf_all_root,
-        tp_threshold=0.50,
-        fp_threshold=0.30,
+        tp_quantile=0.8,
+        fp_quantile=0.2,
         k_neighbors=10,
         propagation_alpha=0.8,
         use_histogram=False
@@ -1527,44 +1847,63 @@ def main_all_models():
     from constants import results_inf_all_root, data_root, ALL_MODELS
 
     for MODEL in ALL_MODELS:
-        # Option A: Adaptive TSBP
+        # # Option A: Adaptive TSBP
         run_adaptive_tsbp(
             model_name=MODEL,
             data_root=data_root,
             results_inf_all_root=results_inf_all_root,
-            tp_quantile=0.8,
-            fp_quantile=0.2,
-            lambda_score=0.5,
-            sigma_spatial=0.2,
+            tp_quantile=0.5,
+            fp_quantile=0.4,
+            lambda_weight=0.75,
+            sigma_spatial=0.5,
             use_histogram=False
         )
 
-        # Option B: Hierarchical Feature TSBP
+        # # Option B: Hierarchical Feature TSBP
         run_hierarchical_tsbp(
             model_name=MODEL,
             data_root=data_root,
             results_inf_all_root=results_inf_all_root,
-            tp_quantile=0.8,
-            fp_quantile=0.2,
-            k_neighbors=10,
+            tp_quantile=0.5,
+            fp_quantile=0.4,
+            k_neighbors=20,
             propagation_alpha=0.8,
             use_histogram=False
         )
 
-        # Option C: TSBP++
+        # # Option C: TSBP++
         run_tsbp_plusplus(
             model_name=MODEL,
             data_root=data_root,
             results_inf_all_root=results_inf_all_root,
-            tp_quantile=0.8,
-            fp_quantile=0.2,
+            tp_quantile=0.5,
+            fp_quantile=0.4,
+            start_tp_num=25,
+            start_fp_num=25,
             uncertainty_weight=0.5,
             max_rounds=10,
             convergence_patience=2,
             use_histogram=False
         )
 
+        run_tsbp_pipeline(
+            model_name=MODEL,
+            data_root=data_root,
+            results_inf_all_root=results_inf_all_root,
+            tp_threshold=0.50,
+            fp_threshold=0.30,
+            start_tp_num=25,
+            start_fp_num=25,
+            use_histogram=False,
+            adaptive_thresh=True,
+            tp_quantile=0.6,
+            fp_quantile=0.9,
+            max_iou_for_match=0.5,
+            score_weight_emd=True
+        )
+
 
 if __name__ == "__main__":
     # main_one_model()
     main_all_models()
+

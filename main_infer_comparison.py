@@ -407,7 +407,7 @@ class DetectionEvaluator:
 
         return results
 
-    def compute_map(self, labels, predictions):
+    def compute_metrics(self, labels, predictions):
         """
         Compute mAP@0.5 and mAP@0.5:0.95 (COCO-style).
 
@@ -493,7 +493,7 @@ def compare_methods(label_dir, pred_dirs, method_names, output_dir=None):
         print(f"Loaded {total_pred} predictions")
 
         # Compute metrics
-        metrics, detailed = evaluator.compute_map(labels, predictions)
+        metrics, detailed = evaluator.compute_metrics(labels, predictions)
 
         # Add method name
         metrics['method'] = method_name
@@ -516,7 +516,6 @@ def compare_methods(label_dir, pred_dirs, method_names, output_dir=None):
     print("=" * 80)
     print(df.to_string(index=False))
     print("=" * 80)
-
 
     # Save results if output directory specified
     if output_dir:
@@ -675,6 +674,11 @@ def run_full_comparison(data_root, results_inf_all_root, model_name, thresholds=
     if os.path.exists(tsbp_dir) and os.listdir(tsbp_dir):
         pred_dirs.append(tsbp_dir)
         method_names.append("TSBP_PP")
+
+    tsbp_dir = f"{results_inf_all_root}/{model_name}/tsbp_improved/"
+    if os.path.exists(tsbp_dir) and os.listdir(tsbp_dir):
+        pred_dirs.append(tsbp_dir)
+        method_names.append("TSBP_I")
 
 
     # Run comparison

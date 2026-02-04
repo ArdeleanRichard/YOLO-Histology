@@ -7,7 +7,7 @@ MODEL = "yoloe"
 ALL_MODELS = ["rtdetr", "yolo8", "yolo9", "yolo10", "yolo11", "yolo12", "yolow", "yoloe"]
 
 # DATA OPTIONS: ["BCNB", "nuclei", "TNBC", "MoNuSAC", "CryoNuSeg"]
-DATA = "CryoNuSeg"
+DATA = "TNBC"
 
 
 data_root = f"./data/{DATA}/"
