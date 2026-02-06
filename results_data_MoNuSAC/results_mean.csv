@@ -1,0 +1,9 @@
+dataset,model,box_mAP@50,box_mAP@50-95,box_mean_f1,box_mean_precision,box_mean_recall,seg_mAP@50,seg_mAP@50-95,seg_mean_f1,seg_mean_precision,seg_mean_recall
+MoNuSAC,rtdetr,0.306,0.069,0.230,0.449,0.203,,,,,
+MoNuSAC,yolo8,0.771,0.506,0.716,0.785,0.676,,,,,
+MoNuSAC,yolo9,0.764,0.482,0.717,0.816,0.656,,,,,
+MoNuSAC,yolo10,0.714,0.447,0.662,0.743,0.619,,,,,
+MoNuSAC,yolo11,0.752,0.491,0.701,0.808,0.637,,,,,
+MoNuSAC,yolo12,0.757,0.505,0.705,0.770,0.688,,,,,
+MoNuSAC,yolow,0.770,0.489,0.705,0.788,0.671,,,,,
+MoNuSAC,yoloe,0.779,0.450,0.721,0.803,0.685,0.765,0.430,0.710,0.791,0.675

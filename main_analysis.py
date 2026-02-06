@@ -129,7 +129,7 @@ def get_dataset_paths(dataset: str):
         'gt_folder': f"{data_root}/labels/test/",
         'image_folder': f"{data_root}/images/test/",
         'inference_root': f"{results_root}/inferences/",
-        'results_csv': f"{results_root}/results.csv"
+        'results_csv': f"{results_root}/results_mean.csv"
     }
 
 
@@ -256,17 +256,7 @@ def main_all_datasets():
     # 5. Critical difference diagrams
     # 6. Comprehensive significance heatmaps
     # 7. Comprehensive text report with all results
-
-    print("\n✓ IMPROVED statistical analysis complete!")
     print(f"  Results saved to: {stats_output}")
-    print("\n  Key files generated:")
-    print("    • comprehensive_statistical_report.txt - Full analysis report")
-    print("    • *_friedman_test.csv - Overall significance test")
-    print("    • *_nemenyi_post_hoc.csv - Pairwise comparisons (Nemenyi)")
-    print("    • *_wilcoxon_bonferroni.csv - Pairwise comparisons (Wilcoxon)")
-    print("    • *_effect_sizes.csv - Effect size calculations")
-    print("    • *_critical_difference_diagram.png - Visual comparison")
-    print("    • *_significance_heatmap_comprehensive.png - Detailed heatmaps")
 
     # ========================================================================
     # CONTRIBUTION #3: Aggregated Failure Mode Analysis

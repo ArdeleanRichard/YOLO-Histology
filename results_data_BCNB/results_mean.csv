@@ -1,0 +1,9 @@
+dataset,model,box_mAP@50,box_mAP@50-95,box_mean_f1,box_mean_precision,box_mean_recall,seg_mAP@50,seg_mAP@50-95,seg_mean_f1,seg_mean_precision,seg_mean_recall
+BCNB,rtdetr,0.181,0.083,0.262,0.267,0.257,,,,,
+BCNB,yolo8,0.249,0.131,0.177,0.424,0.114,,,,,
+BCNB,yolo9,0.259,0.135,0.198,0.431,0.131,,,,,
+BCNB,yolo10,0.265,0.143,0.158,0.462,0.099,,,,,
+BCNB,yolo11,0.261,0.142,0.242,0.405,0.172,,,,,
+BCNB,yolo12,0.279,0.155,0.215,0.460,0.141,,,,,
+BCNB,yolow,0.256,0.142,0.197,0.428,0.128,,,,,
+BCNB,yoloe,0.259,0.135,0.242,0.395,0.182,0.258,0.133,0.241,0.392,0.181
