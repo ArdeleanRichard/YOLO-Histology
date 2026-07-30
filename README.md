@@ -2,15 +2,11 @@
 
 *A multi-dataset benchmark and test-time inference*
 
-This repository contains the code and configurations for a study submitted as a scientific research article.
+[![DOI](https://img.shields.io/badge/DOI-10.1371/journal.pone.0354618-blue)](https://doi.org/10.1371/journal.pone.0354618) 
 
-<!-- 
-[![DOI](https://img.shields.io/badge/DOI-10.3390/diagnostics15141823-blue)](https://doi.org/10.3390/diagnostics15141823) 
-
-This repository contains the code and configurations used in the study titled:
-**"Can YOLO Detect Retinal Pathologies? A Step Towards Automated OCT Analysis"**
-by Adriana-Ioana Ardelean, Eugen-Richard Ardelean, and Anca Marginean, published in *Diagnostics*, 2025.
--->
+This repository contains the code and configurations for our work titled:
+**"Object detection in histology: A multi-dataset benchmark and test-time inference"**
+by Dragoș-Vasile Leordean and Eugen-Richard Ardelean, published in *PLOS One*, 2026.
 
 ## 📄 Overview
 
